@@ -1,0 +1,192 @@
+2026-08-14 18:29:36 [INFO] guardian-daemon: started -- watching apache2.service every 3s (pid 70616)
+2026-08-14 18:29:36 [WARN] guardian-daemon: apache2.service is inactive -- calling healing.sh
+2026-08-14 18:29:36 [ACTION] healing.sh: apache2 -- state=inactive, running: systemctl start apache2.service
+2026-08-14 18:29:36 [SUCCESS] healing.sh: apache2 -- apache2.service recovered: inactive -> active in 0.02s
+2026-08-14 18:29:36 [INFO] guardian-daemon: healing.sh succeeded for apache2
+2026-08-14 18:29:39 [INFO] guardian-daemon: apache2.service is active again
+2026-08-14 18:29:42 [WARN] guardian-daemon: apache2.service is failed -- calling healing.sh
+2026-08-14 18:29:42 [ACTION] healing.sh: apache2 -- state=failed, clearing failure counter
+2026-08-14 18:29:42 [ACTION] healing.sh: apache2 -- state=failed, running: systemctl start apache2.service
+2026-08-14 18:29:42 [SUCCESS] healing.sh: apache2 -- apache2.service recovered: failed -> active in 0.02s
+2026-08-14 18:29:42 [INFO] guardian-daemon: healing.sh succeeded for apache2
+2026-08-14 18:29:45 [INFO] guardian-daemon: apache2.service is active again
+2026-08-14 18:29:46 [INFO] guardian-daemon: stopped cleanly after 2 healing attempt(s), 2 successful
+2026-08-14 18:34:44 [ACTION] healing.sh: apache2 -- state=inactive, running: systemctl start apache2.service
+2026-08-14 18:34:44 [SUCCESS] healing.sh: apache2 -- apache2.service recovered: inactive -> active in 0.02s
+2026-08-14 18:37:17 [REFUSED] healing.sh: ssh -- ssh is a PROTECTED service and must never be restarted by this tool
+2026-08-15 16:41:01 [REFUSED] healing.sh: ssh -- ssh is a PROTECTED service and must never be restarted by this tool
+2026-08-15 16:41:01 [REFUSED] healing.sh: ssh -- ssh is a PROTECTED service and must never be restarted by this tool
+2026-08-15 16:41:01 [REFUSED] healing.sh: nginx -- nginx is not in HEALABLE_SERVICES (allowed: apache2)
+2026-08-15 16:41:01 [REFUSED] healing.sh: rejected malformed service name
+2026-08-15 16:41:01 [REFUSED] healing.sh: rejected malformed service name
+2026-08-15 16:41:01 [REFUSED] healing.sh: rejected malformed service name
+2026-08-15 16:41:10 [REFUSED] healing.sh: ssh -- ssh is a PROTECTED service and must never be restarted by this tool
+2026-08-15 16:41:10 [REFUSED] healing.sh: rejected malformed service name
+2026-08-15 16:41:10 [REFUSED] healing.sh: ssh -- ssh is a PROTECTED service and must never be restarted by this tool
+2026-08-15 16:41:10 [REFUSED] healing.sh: rejected malformed service name
+2026-08-15 16:49:24 [ACTION] healing.sh: apache2 -- state=inactive, running: systemctl start apache2.service
+2026-08-15 16:49:24 [SUCCESS] healing.sh: apache2 -- apache2.service recovered: inactive -> active in 0.12s
+2026-08-15 16:49:38 [INFO] healing.sh: apache2 -- already active, no action taken
+2026-08-15 17:31:02 [REFUSED] console: could not understand: 'make me a sandwich'
+2026-08-15 17:31:02 [REFUSED] console: could not understand: 'delete everything now'
+2026-08-15 17:31:13 [REFUSED] console: schedule_file rejected: name is required
+2026-08-15 17:31:13 [REFUSED] console: could not understand: 'service'
+2026-08-15 17:31:13 [REFUSED] console: could not understand: 'check'
+2026-08-15 17:31:14 [REFUSED] console: delete_everything rejected: unknown action: 'delete_everything' is not in the registry
+2026-08-15 17:32:06 [REFUSED] console: not confident enough for 'storage and memory' (best check_disk at 0.74)
+2026-08-15 17:35:30 [ACTION] workspace.sh: notes -- writing /home/kali/Desktop/linux-guardian/workspace/notes.txt
+2026-08-15 17:35:30 [SUCCESS] workspace.sh: notes -- created notes.txt (23 bytes)
+2026-08-15 17:35:30 [ACTION] workspace.sh: notes -- writing /home/kali/Desktop/linux-guardian/workspace/notes.txt
+2026-08-15 17:35:30 [SUCCESS] workspace.sh: notes -- replaced notes.txt (13 bytes)
+2026-08-15 17:35:30 [ACTION] workspace.sh: tricky -- writing /home/kali/Desktop/linux-guardian/workspace/tricky.txt
+2026-08-15 17:35:30 [SUCCESS] workspace.sh: tricky -- created tricky.txt (78 bytes)
+2026-08-15 17:35:39 [REFUSED] workspace.sh: rejected name: ../etc/passwd
+2026-08-15 17:35:39 [REFUSED] workspace.sh: rejected name: a;rm -rf /
+2026-08-15 17:35:39 [REFUSED] workspace.sh: rejected name: 
+2026-08-15 17:35:39 [REFUSED] workspace.sh: rejected name: -rf
+2026-08-15 17:35:39 [REFUSED] workspace.sh: rejected name: evil.sh
+2026-08-15 17:35:39 [REFUSED] workspace.sh: rejected name: a/b
+2026-08-15 17:35:39 [REFUSED] workspace.sh: rejected name: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+2026-08-15 17:37:33 [ACTION] schedule.sh: schedule -- creating timer for Thu 12:00
+2026-08-15 17:37:34 [SUCCESS] schedule.sh: schedule -- scheduled schedule.txt for Thu 12:00 (next: Thu 2026-08-20 12:00:00 EDT)
+2026-08-15 17:37:54 [SUCCESS] workspace.sh: schedule -- timer fired, appended one line
+2026-08-15 17:37:54 [SUCCESS] workspace.sh: schedule -- timer fired, appended one line
+2026-08-15 17:37:54 [SUCCESS] workspace.sh: schedule -- timer fired, appended one line
+2026-08-15 17:38:05 [ACTION] schedule.sh: schedule -- cancelling guardian-schedule.timer
+2026-08-15 17:38:05 [SUCCESS] schedule.sh: schedule -- cancelled the schedule for schedule
+2026-08-15 17:38:18 [REFUSED] schedule.sh: rejected name: ../evil
+2026-08-15 17:38:18 [REFUSED] schedule.sh: rejected name: a;rm -rf /
+2026-08-15 17:38:18 [REFUSED] schedule.sh: rejected day: funday
+2026-08-15 17:38:18 [REFUSED] schedule.sh: rejected time: 25:00
+2026-08-15 17:38:18 [REFUSED] schedule.sh: rejected time: 12:60
+2026-08-15 17:38:18 [REFUSED] schedule.sh: rejected name: -rf
+2026-08-15 17:38:18 [REFUSED] schedule.sh: rejected day: 
+2026-08-15 17:38:18 [REFUSED] schedule.sh: no such schedule: nosuchthing
+2026-08-15 17:38:18 [REFUSED] schedule.sh: rejected name: ../../etc/passwd
+2026-08-15 17:39:54 [ACTION] console: schedule_file previewed, awaiting confirmation: {'name': 'schedule', 'day': 'Thu', 'time': '12:00'}
+2026-08-15 17:40:12 [ACTION] console: schedule_file confirmed by user: {'name': 'schedule', 'day': 'Thu', 'time': '12:00'}
+2026-08-15 17:40:12 [ACTION] schedule.sh: schedule -- creating timer for Thu 12:00
+2026-08-15 17:40:13 [SUCCESS] schedule.sh: schedule -- scheduled schedule.txt for Thu 12:00 (next: Thu 2026-08-20 12:00:00 EDT)
+2026-08-15 17:40:13 [SUCCESS] console: schedule_file -- scheduled schedule.txt for Thu 12:00
+2026-08-15 17:40:23 [ACTION] console: create_file confirmed by user: {'name': 'notes', 'content': 'written from the console'}
+2026-08-15 17:40:23 [ACTION] workspace.sh: notes -- writing /home/kali/Desktop/linux-guardian/workspace/notes.txt
+2026-08-15 17:40:23 [SUCCESS] workspace.sh: notes -- created notes.txt (25 bytes)
+2026-08-15 17:40:23 [SUCCESS] console: create_file -- created notes.txt (25 bytes)
+2026-08-15 17:40:23 [REFUSED] console: create_file rejected at confirm: create_file.name: '../../etc/passwd' is not valid -- expected 1 to 40 characters, letters digits underscore and hyphen only, starting with a letter, digit or underscore -- no dots, no slashes, and never a leading hyphen
+2026-08-15 17:40:23 [REFUSED] console: heal_service rejected at confirm: service: 'ssh' is not allowed. HEALABLE_SERVICES permits: apache2
+2026-08-15 17:40:34 [ACTION] console: cancel_schedule previewed, awaiting confirmation: {'name': 'schedule'}
+2026-08-15 17:40:34 [ACTION] console: cancel_schedule confirmed by user: {'name': 'schedule'}
+2026-08-15 17:40:34 [ACTION] schedule.sh: schedule -- cancelling guardian-schedule.timer
+2026-08-15 17:40:34 [SUCCESS] schedule.sh: schedule -- cancelled the schedule for schedule
+2026-08-15 17:40:34 [SUCCESS] console: cancel_schedule -- cancelled the schedule for schedule
+2026-08-15 17:40:56 [ACTION] workspace.sh: probe -- writing /home/kali/Desktop/linux-guardian/workspace/probe.txt
+2026-08-15 17:40:56 [SUCCESS] workspace.sh: probe -- created probe.txt (2 bytes)
+2026-08-15 17:41:05 [ACTION] schedule.sh: schedule -- creating timer for Thu 12:00
+2026-08-15 17:41:05 [SUCCESS] schedule.sh: schedule -- scheduled schedule.txt for Thu 12:00 (next: Thu 2026-08-20 12:00:00 EDT)
+2026-08-15 17:46:23 [REFUSED] console: could not understand: 'make me a sandwich'
+2026-08-15 17:46:23 [REFUSED] console: could not understand: 'make me a sandwich'
+2026-08-15 17:46:23 [REFUSED] console: could not understand: 'qqq zzz nonsense'
+2026-08-15 17:46:53 [ACTION] console: create_file previewed, awaiting confirmation: {'name': 'demo'}
+2026-08-15 17:46:53 [ACTION] console: create_file confirmed by user: {'name': 'demo'}
+2026-08-15 17:46:53 [ACTION] workspace.sh: demo -- writing /home/kali/Desktop/linux-guardian/workspace/demo.txt
+2026-08-15 17:46:53 [SUCCESS] workspace.sh: demo -- created demo.txt (50 bytes)
+2026-08-15 17:46:53 [SUCCESS] console: create_file -- created demo.txt (50 bytes)
+2026-08-15 17:58:00 [ACTION] console: create_file previewed, awaiting confirmation: {'name': 'uidemo'}
+2026-08-15 17:58:00 [ACTION] console: create_file confirmed by user: {'name': 'uidemo'}
+2026-08-15 17:58:00 [ACTION] workspace.sh: uidemo -- writing /home/kali/Desktop/linux-guardian/workspace/uidemo.txt
+2026-08-15 17:58:00 [SUCCESS] workspace.sh: uidemo -- created uidemo.txt (50 bytes)
+2026-08-15 17:58:00 [SUCCESS] console: create_file -- created uidemo.txt (50 bytes)
+2026-08-15 17:58:00 [REFUSED] console: create_file rejected at confirm: create_file.name: '../etc/passwd' is not valid -- expected 1 to 40 characters, letters digits underscore and hyphen only, starting with a letter, digit or underscore -- no dots, no slashes, and never a leading hyphen
+2026-08-15 17:59:25 [REFUSED] workspace.sh: rejected name: ../etc/passwd
+2026-08-15 17:59:25 [REFUSED] workspace.sh: rejected name: -rf
+2026-08-15 17:59:25 [REFUSED] schedule.sh: rejected day: funday
+2026-08-15 17:59:25 [REFUSED] schedule.sh: rejected time: 25:00
+2026-08-15 17:59:25 [REFUSED] console: heal_service rejected at confirm: service: 'ssh' is not allowed. HEALABLE_SERVICES permits: apache2
+2026-08-15 18:00:47 [ACTION] console: create_file previewed, awaiting confirmation: {'name': 'iit'}
+2026-08-15 18:01:03 [ACTION] console: create_file confirmed by user: {'name': 'iit'}
+2026-08-15 18:01:03 [ACTION] workspace.sh: iit -- writing /home/kali/Desktop/linux-guardian/workspace/iit.txt
+2026-08-15 18:01:03 [SUCCESS] workspace.sh: iit -- created iit.txt (50 bytes)
+2026-08-15 18:01:04 [SUCCESS] console: create_file -- created iit.txt (50 bytes)
+2026-08-15 18:05:01 [ACTION] console: create_file confirmed by user: {'name': 'iit'}
+2026-08-15 18:05:01 [ACTION] workspace.sh: iit -- writing /home/kali/Desktop/linux-guardian/workspace/iit.txt
+2026-08-15 18:05:01 [SUCCESS] workspace.sh: iit -- replaced iit.txt (50 bytes)
+2026-08-15 18:05:01 [SUCCESS] console: create_file -- replaced iit.txt (50 bytes)
+2026-08-15 18:08:02 [ACTION] healing.sh: apache2 -- state=inactive, running: systemctl start apache2.service
+2026-08-15 18:08:02 [SUCCESS] healing.sh: apache2 -- apache2.service recovered: inactive -> active in 0.10s
+2026-08-15 18:10:32 [REFUSED] console: could not understand: 'cheak  the  current user name'
+2026-08-15 18:12:17 [INFO] healing.sh: apache2 -- already active, no action taken
+2026-08-15 18:12:17 [ACTION] workspace.sh: _probe -- writing /home/kali/Desktop/linux-guardian/workspace/_probe.txt
+2026-08-15 18:12:17 [SUCCESS] workspace.sh: _probe -- created _probe.txt (2 bytes)
+2026-08-15 18:13:23 [REFUSED] console: could not understand: 'check  if there is a file named test  on  desktop'
+2026-08-15 18:15:41 [ACTION] console: create_file confirmed by user: {'name': 'demo'}
+2026-08-15 18:15:41 [ACTION] workspace.sh: demo -- writing /home/kali/Desktop/linux-guardian/workspace/demo.txt
+2026-08-15 18:15:41 [SUCCESS] workspace.sh: demo -- created demo.txt (50 bytes)
+2026-08-15 18:15:41 [SUCCESS] console: create_file -- created demo.txt (50 bytes)
+2026-08-15 18:15:41 [ACTION] console: heal_service confirmed by user: {'service': 'apache2'}
+2026-08-15 18:15:41 [INFO] healing.sh: apache2 -- already active, no action taken
+2026-08-15 18:15:41 [SUCCESS] console: heal_service -- apache2.service was already active; nothing to do
+2026-08-15 18:16:10 [INFO] healing.sh: apache2 -- already active, no action taken
+2026-08-15 18:16:10 [INFO] healing.sh: apache2 -- already active, no action taken
+2026-08-15 18:16:59 [ACTION] console: heal_service confirmed by user: {'service': 'apache2'}
+2026-08-15 18:16:59 [INFO] healing.sh: apache2 -- already active, no action taken
+2026-08-15 18:16:59 [SUCCESS] console: heal_service -- apache2.service was already active; nothing to do
+2026-08-15 18:19:06 [ACTION] workspace.sh: test -- writing /home/kali/Desktop/linux-guardian/workspace/test.txt
+2026-08-15 18:19:06 [SUCCESS] workspace.sh: test -- created test.txt (19 bytes)
+2026-08-15 18:20:39 [REFUSED] console: list_files rejected: list_files does not take a parameter called 'name'
+2026-08-15 18:22:15 [ACTION] console: create_file previewed, awaiting confirmation: {'name': 'notes'}
+2026-08-15 18:22:15 [ACTION] console: heal_service previewed, awaiting confirmation: {'service': 'apache2'}
+2026-08-15 18:27:43 [REFUSED] console: create_file rejected: name is required
+2026-08-15 18:48:59 [REFUSED] console: could not understand: 'cheak  service'
+2026-08-15 18:49:06 [REFUSED] console: could not understand: 'cheak  service ssh'
+2026-08-15 18:49:25 [REFUSED] console: could not understand: 'cheak  service apch2'
+2026-08-15 18:49:31 [REFUSED] console: could not understand: 'cheak  service apsch2'
+2026-08-15 18:49:36 [REFUSED] console: could not understand: 'cheak  service apsch2'
+2026-08-15 18:49:41 [REFUSED] console: could not understand: 'cheak  service apach2'
+2026-08-15 18:50:08 [REFUSED] console: could not understand: 'cheak  memmory'
+2026-08-16 11:56:16 [INFO] guardian-daemon: started -- watching apache2.service every 2s (pid 52210)
+2026-08-16 11:56:16 [INFO] guardian-daemon: history collection is ON, pruning every 2 ticks
+2026-08-16 11:56:16 [WARN] guardian-daemon: apache2.service is inactive -- calling healing.sh
+2026-08-16 11:56:16 [ACTION] healing.sh: apache2 -- state=inactive, running: systemctl start apache2.service
+2026-08-16 11:56:16 [SUCCESS] healing.sh: apache2 -- apache2.service recovered: inactive -> active in 0.12s
+2026-08-16 11:56:16 [INFO] guardian-daemon: healing.sh succeeded for apache2
+2026-08-16 11:56:18 [INFO] guardian-daemon: retention run: {  "cutoff": 1786290978,  "deleted_samples": 0,  "deleted_runs": 0,  "deleted_by_age": 0,  "deleted_by_row_cap": 0,  "bytes_before": 28672,  "bytes_after": 28672,  "module": "store",  "status": "ok"}
+2026-08-16 11:56:18 [INFO] guardian-daemon: apache2.service is active again
+2026-08-16 11:56:23 [INFO] guardian-daemon: retention run: {  "cutoff": 1786290983,  "deleted_samples": 0,  "deleted_runs": 0,  "deleted_by_age": 0,  "deleted_by_row_cap": 0,  "bytes_before": 36864,  "bytes_after": 36864,  "module": "store",  "status": "ok"}
+2026-08-16 11:56:23 [INFO] guardian-daemon: stopped cleanly after 4 tick(s): 4 sample(s) stored, 1 healing attempt(s), 1 successful
+2026-08-16 11:57:16 [INFO] healing.sh: apache2 -- already active, no action taken
+2026-08-16 12:22:46 [INFO] guardian-daemon: started -- watching apache2.service every 2s (pid 118623)
+2026-08-16 12:22:46 [INFO] guardian-daemon: history collection is ON, pruning every 120 ticks
+2026-08-16 12:22:55 [INFO] guardian-daemon: stopped cleanly after 5 tick(s): 5 sample(s) stored, 0 healing attempt(s), 0 successful
+2026-08-16 12:23:12 [INFO] guardian-daemon: started -- watching apache2.service every 2s (pid 119260)
+2026-08-16 12:23:12 [INFO] guardian-daemon: history collection is ON, pruning every 120 ticks
+2026-08-16 12:23:16 [WARN] guardian-daemon: opened INC-20260816-0003 CPU saturation (MEDIUM, risk 48 MEDIUM); opened INC-20260816-0004 Listening port change (MEDIUM, risk 52 HIGH)
+2026-08-16 12:23:23 [WARN] guardian-daemon: opened INC-20260816-0005 Disk filling or saturated (MEDIUM, risk 40 MEDIUM)
+2026-08-16 12:23:34 [INFO] guardian-daemon: stopped cleanly after 11 tick(s): 11 sample(s) stored, 0 healing attempt(s), 0 successful
+2026-08-16 12:31:39 [REFUSED] console: could not understand: 'schedule_file \\'
+2026-08-16 12:31:46 [REFUSED] console: could not understand: 'schedule_file test'
+2026-08-16 12:37:44 [ACTION] healing.sh: apache2 -- state=inactive, running: systemctl start apache2.service
+2026-08-16 12:37:44 [SUCCESS] healing.sh: apache2 -- apache2.service recovered: inactive -> active in 0.08s
+2026-08-16 17:00:38 [ACTION] console: create_file previewed, awaiting confirmation: {'name': 'buildertest'}
+2026-08-16 17:00:38 [REFUSED] console: create_file rejected: create_file.name: '../../etc/passwd' is not valid -- expected 1 to 40 characters, letters digits underscore and hyphen only, starting with a letter, digit or underscore -- no dots, no slashes, and never a leading hyphen
+2026-08-16 17:00:38 [REFUSED] console: check_disk rejected: check_disk does not take a parameter called 'evil'
+2026-08-16 17:00:50 [ACTION] console: create_file confirmed by user: {'name': 'buildertest', 'content': 'made by the guided builder'}
+2026-08-16 17:00:50 [ACTION] workspace.sh: buildertest -- writing /home/kali/Desktop/linux-guardian/workspace/buildertest.txt
+2026-08-16 17:00:50 [SUCCESS] workspace.sh: buildertest -- created buildertest.txt (27 bytes)
+2026-08-16 17:00:50 [SUCCESS] console: create_file -- created buildertest.txt (27 bytes)
+2026-08-16 17:17:20 [REFUSED] console: create_file rejected: create_file.name: '../../etc/passwd' is not valid -- expected 1 to 40 characters, letters digits underscore and hyphen only, starting with a letter, digit or underscore -- no dots, no slashes, and never a leading hyphen
+2026-08-16 17:17:21 [REFUSED] console: create_file rejected: create_file.name: 'evil.sh' is not valid -- expected 1 to 40 characters, letters digits underscore and hyphen only, starting with a letter, digit or underscore -- no dots, no slashes, and never a leading hyphen
+2026-08-16 17:17:21 [REFUSED] console: create_file rejected: create_file.name: '-rf' is not valid -- expected 1 to 40 characters, letters digits underscore and hyphen only, starting with a letter, digit or underscore -- no dots, no slashes, and never a leading hyphen
+2026-08-16 17:17:21 [REFUSED] console: heal_service rejected: service: 'ssh' is not allowed. HEALABLE_SERVICES permits: apache2
+2026-08-16 17:17:21 [REFUSED] console: heal_service rejected: service: 'nginx' is not allowed. HEALABLE_SERVICES permits: apache2
+2026-08-16 17:17:21 [REFUSED] console: check_disk rejected: check_disk does not take a parameter called 'evil'
+2026-08-16 17:17:21 [REFUSED] console: no_such_thing rejected: unknown action: 'no_such_thing' is not in the registry
+2026-08-16 17:17:21 [ACTION] console: create_file previewed, awaiting confirmation: {'name': 'finalcheck'}
+2026-08-16 18:16:54 [ACTION] healing.sh: apache2 -- state=inactive, running: systemctl start apache2.service
+2026-08-16 18:16:54 [SUCCESS] healing.sh: apache2 -- apache2.service recovered: inactive -> active in 0.16s
+2026-08-17 03:41:18 [REFUSED] console: could not understand: 'is my  srtorage getting full'
+2026-08-17 03:53:18 [REFUSED] console: could not understand: 'cheak services'
+2026-08-17 03:53:19 [REFUSED] console: could not understand: 'cheak services'
+2026-08-17 03:53:41 [REFUSED] console: could not understand: 'show the top  10  process'
+2026-08-17 04:12:47 [ACTION] console: create_file previewed, awaiting confirmation: {'name': 'report'}
+2026-08-17 04:13:07 [REFUSED] console: schedule_file rejected: name is required
+2026-08-17 04:13:15 [REFUSED] console: could not understand: 'hi'

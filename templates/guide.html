@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}System guide{% endblock %}
+{% block heading %}System guide{% endblock %}
+
+{% block body %}
+<div class="note">
+  <strong>Start here.</strong> Linux Guardian watches this computer, explains
+  unusual behaviour, and only proposes a repair. You always approve a change.
+</div>
+
+<div class="section-title"><span>The simple flow</span></div>
+<div class="grid wide">
+  <div class="card"><h2>1 · Monitor</h2><p>Dashboard shows CPU, memory, disk, network and services. Green means the check passed; amber means watch it; red means it failed.</p></div>
+  <div class="card"><h2>2 · Investigate</h2><p>An incident is a grouped problem. Press <strong>Investigate</strong> to collect read-only evidence and see facts, an explanation, and a recommendation.</p></div>
+  <div class="card"><h2>3 · Decide</h2><p><strong>Propose a fix</strong> only creates a preview. Nothing changes until you deliberately press <strong>Approve and run</strong>.</p></div>
+  <div class="card"><h2>4 · Verify</h2><p>After an approved repair, Guardian measures again. It marks the incident resolved only when the new reading proves the result.</p></div>
+</div>
+
+<div class="section-title"><span>What each page is for</span></div>
+<div class="card"><div class="t-scroll"><table>
+  <thead><tr><th>Page</th><th>Use it when you want to…</th></tr></thead>
+  <tbody>
+    <tr><td>Dashboard</td><td>see the machine’s current health and the most important next step.</td></tr>
+    <tr><td>Incidents</td><td>understand an unusual condition and investigate it safely.</td></tr>
+    <tr><td>Assistant</td><td>ask a simple question such as “is apache2 running?” or create a safe workspace file. If you do not know what to type, open <strong>Build a command</strong>: pick an action, fill the boxes, and watch the English sentence and the Linux command build themselves side by side.</td></tr>
+    <tr><td>Automation</td><td>check whether history collection and the optional background daemon are configured.</td></tr>
+    <tr><td>Audit log</td><td>see what Guardian was asked to do and whether it succeeded or refused.</td></tr>
+  </tbody>
+</table></div></div>
+
+{# The assistant is the page a first-time user is most likely to open and least
+   likely to know what to do with, so it gets its own explanation rather than a
+   line in the table above. #}
+<div class="section-title"><span>Typing a request in plain English</span></div>
+<div class="card">
+  <p style="margin:0 0 var(--s2)">
+    The Assistant turns an ordinary sentence into one approved Linux command.
+    It never invents a command: it matches your words against a fixed list of
+    14 actions, and anything not on that list simply cannot happen.
+  </p>
+  <div class="t-scroll"><table>
+    <thead><tr><th>You type</th><th>Linux runs</th></tr></thead>
+    <tbody>
+      <tr><td>how full is my disk</td><td class="mono">linux/system.sh</td></tr>
+      <tr><td>is apache2 running</td><td class="mono">linux/services.sh</td></tr>
+      <tr><td>create a file called notes</td><td class="mono">linux/workspace.sh create notes</td></tr>
+      <tr><td>restart apache2</td><td class="mono">linux/healing.sh apache2</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted" style="margin:var(--s2) 0 0;font-size:var(--t-sm)">
+    The last two change something, so they show you a preview and wait for a
+    second, deliberate confirmation. If Guardian is not sure which action you
+    meant, it asks instead of guessing &mdash; it never picks for you.
+  </p>
+</div>
+
+<div class="section-title"><span>Important words</span></div>
+<div class="grid two">
+  <div class="card"><h2>Incident</h2><p class="muted">One real-world problem, not every individual metric. For example, high load and low CPU idle time become one CPU saturation incident.</p></div>
+  <div class="card"><h2>Investigation</h2><p class="muted">A read-only check. It collects evidence but cannot restart, stop, delete, or edit anything.</p></div>
+  <div class="card"><h2>Daemon</h2><p class="muted">An optional background loop. Every 30 seconds it records a small sample and can restart only the explicitly allowed service.</p></div>
+  <div class="card"><h2>Approval</h2><p class="muted">Your second confirmation before a write action. It is intentionally separate from the preview.</p></div>
+</div>
+{% endblock %}

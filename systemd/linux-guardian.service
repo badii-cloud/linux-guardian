@@ -1,0 +1,111 @@
+[Unit]
+# ---------------------------------------------------------------------------
+#  [Unit] -- who this unit is and how it relates to other units.
+#  These directives say nothing about HOW to run the program; they only place
+#  it in systemd's dependency graph.
+# ---------------------------------------------------------------------------
+
+# Shown by `systemctl status` and in the boot output. One short sentence.
+Description=Linux Guardian self-healing daemon
+
+# Where a human can read more. systemd does not use it; `systemctl status`
+# prints it so the next administrator does not have to go looking.
+Documentation=file:///home/kali/Desktop/linux-guardian/CLAUDE.md
+
+# ORDERING ONLY. "Start me after network-online.target has been reached."
+# After= does NOT pull anything in: on its own it means "if that target is
+# being started anyway, wait for it", and nothing more.
+After=network-online.target
+
+# THE OTHER HALF OF THE PAIR. Wants= is what actually asks for the target to be
+# started. After= without Wants= is the classic mistake: the ordering is
+# respected but nothing ever requests the network, so the daemon may start
+# before there is one.
+# Wants= (not Requires=) because if the network never comes up we still want
+# this daemon running -- apache2 is a local service and healing it is still
+# useful. Requires= would abort our unit along with the failed dependency.
+Wants=network-online.target
+
+
+[Service]
+# ---------------------------------------------------------------------------
+#  [Service] -- how to actually run, supervise and stop the program.
+# ---------------------------------------------------------------------------
+
+# Type=simple: systemd considers the service started as soon as it has forked
+# ExecStart. Correct here because guardian-daemon.sh is a plain foreground loop
+# that never detaches. Type=forking would be for a program that daemonises
+# itself and exits the parent -- systemd would then wait for a fork that never
+# comes and eventually declare the unit failed.
+Type=simple
+
+# RUN AS AN UNPRIVILEGED USER, NOT ROOT.
+# The daemon needs no root of its own: it calls healing.sh, which uses `sudo -n`
+# for the three exact commands granted in /etc/sudoers.d/linux-guardian. If this
+# ran as root, a bug anywhere in the loop would be a bug running as root.
+User=kali
+Group=kali
+
+# The directory the process starts in. The scripts resolve their own paths from
+# ${BASH_SOURCE[0]} so they do not depend on this, but setting it means any
+# relative path a future edit introduces resolves somewhere sensible instead of
+# in "/", which is systemd's default.
+WorkingDirectory=/home/kali/Desktop/linux-guardian
+
+# The command to run. It MUST be an absolute path -- systemd has no $PATH
+# lookup and no shell here, so "linux/guardian-daemon.sh" would simply not be
+# found. There is no shell either, which means no pipes, no $VARIABLES and no
+# globbing in this line: it is exec(), not a command line.
+ExecStart=/home/kali/Desktop/linux-guardian/linux/guardian-daemon.sh
+
+# Restart the daemon if it exits with a FAILURE (non-zero status or a signal),
+# but not when it exits 0 -- exit 0 is the clean shutdown path in the script, so
+# `systemctl stop` must not be answered by an immediate restart.
+Restart=on-failure
+
+# Wait 10 seconds before restarting. Without a delay, a daemon that fails
+# instantly would be restarted in a tight loop and systemd would give up
+# entirely once it hit its start-rate limit.
+RestartSec=10
+
+# How long to wait after SIGTERM before resorting to SIGKILL. The script traps
+# SIGTERM and uses an interruptible `wait`, so it should exit in milliseconds;
+# 15 seconds is a generous margin that still prevents a hung process from
+# blocking a shutdown for the default 90 seconds.
+TimeoutStopSec=15
+
+# Send both streams to the systemd journal, readable with
+#   journalctl -u linux-guardian -f
+# The daemon prints plain human-readable lines precisely because this is where
+# they end up.
+StandardOutput=journal
+StandardError=journal
+
+# The name these lines are tagged with in the journal, so
+# `journalctl -t linux-guardian` finds them regardless of unit.
+SyslogIdentifier=linux-guardian
+
+# Give the service a private /tmp, so anything it writes there cannot collide
+# with, or be read by, another service.
+PrivateTmp=yes
+
+# NOTE ON HARDENING -- READ BEFORE ADDING MORE DIRECTIVES.
+# It is tempting to add NoNewPrivileges=yes here; every systemd hardening guide
+# recommends it. IT WOULD BREAK THIS SERVICE. NoNewPrivileges forbids a process
+# from gaining privileges through setuid binaries, and `sudo` is exactly that.
+# healing.sh would then fail on every attempt with a permission error.
+# Leaving it at its default (no) is a deliberate decision, not an oversight.
+
+
+[Install]
+# ---------------------------------------------------------------------------
+#  [Install] -- what `systemctl enable` should do. This section is read ONLY by
+#  enable/disable; it has no effect while the service is running.
+# ---------------------------------------------------------------------------
+
+# `systemctl enable linux-guardian` creates a symlink in
+# multi-user.target.wants/, so the daemon starts on every boot into the normal
+# multi-user system. multi-user.target is the standard "system is up, networking
+# and services running" target -- the modern equivalent of SysV runlevel 3.
+# graphical.target pulls in multi-user.target, so this covers the desktop too.
+WantedBy=multi-user.target

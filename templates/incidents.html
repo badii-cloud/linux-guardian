@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}Incidents{% endblock %}
+{% block heading %}Incidents{% endblock %}
+
+{% block topbar %}
+  {# A plain link per filter rather than a <select> with JavaScript. Each view
+     gets its own URL, so it can be bookmarked, shared and reloaded -- and the
+     page works with JavaScript switched off, which a monitoring tool should. #}
+  <div class="actions">
+    <a class="btn ghost" href="{{ url_for('incidents_page', status='open') }}"
+       {% if selected == 'open' %}style="background:var(--panel3)"{% endif %}>Open</a>
+    <a class="btn ghost" href="{{ url_for('incidents_page', status='RESOLVED') }}"
+       {% if selected == 'RESOLVED' %}style="background:var(--panel3)"{% endif %}>Resolved</a>
+    <a class="btn ghost" href="{{ url_for('incidents_page', status='IGNORED') }}"
+       {% if selected == 'IGNORED' %}style="background:var(--panel3)"{% endif %}>Ignored</a>
+  </div>
+{% endblock %}
+
+{% block body %}
+
+{# ---------------------------------------------------------------------------
+   THE HEADLINE COUNTS.
+   Severity, not status: "how bad is what is open" is the question somebody
+   walking up to the screen is asking. Status counts are one click away.
+   --------------------------------------------------------------------------- #}
+<div class="grid">
+  <div class="card">
+    <h2>Open incidents</h2>
+    <div class="big">{{ summary.open }}</div>
+    <div class="sub">of {{ summary.by_status.values() | sum }} ever recorded</div>
+  </div>
+  {% for level in ['CRITICAL', 'HIGH', 'MEDIUM'] %}
+  <div class="card">
+    <h2>{{ level | lower | capitalize }}</h2>
+    <div class="big {{ 'muted' if not summary.open_by_severity[level] }}">
+      {{ summary.open_by_severity[level] }}</div>
+    <div class="sub">open at {{ level | lower }} severity</div>
+  </div>
+  {% endfor %}
+  <div class="card">
+    <h2>Highest open risk</h2>
+    <div class="big">{{ summary.highest_open_risk if summary.highest_open_risk is not none else '--' }}</div>
+    <div class="sub">out of 100</div>
+  </div>
+</div>
+
+<div class="section-title">
+  <span>{{ selected if selected != 'open' else 'Open' }} &mdash; {{ incidents | length }} incident{{ '' if incidents | length == 1 else 's' }}</span>
+</div>
+
+{% if not incidents %}
+  <div class="card">
+    <p class="muted" style="margin:0">
+      Nothing here.
+      {% if selected == 'open' %}
+        No incident is currently open, which is the state a healthy machine
+        should be in. Incidents are raised automatically by the daemon when a
+        measurement leaves this machine&rsquo;s own baseline &mdash; you do not
+        create them by hand.
+      {% else %}
+        No incident has reached {{ selected }}.
+      {% endif %}
+    </p>
+  </div>
+{% else %}
+<div class="card">
+  <div class="t-scroll">
+  <table>
+    <thead>
+      <tr>
+        {# THE COLUMNS ANSWER THE QUESTIONS A READER ACTUALLY ARRIVES WITH,
+           in the order they arrive: what is it, how much should I care, what
+           is happening about it. The identifier and the category are still
+           here but they are not what anybody scans for, so they are secondary
+           lines rather than columns of their own. #}
+        <th>What is wrong</th>
+        <th>How much to care</th>
+        <th class="num">Risk</th>
+        <th>What is happening about it</th>
+        <th class="num">Seen</th>
+        <th>Updated</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for incident in incidents %}
+      {% set said = plain[incident.id] %}
+      <tr>
+        <td>
+          <a href="{{ url_for('incident_page', incident_id=incident.id) }}"
+             style="font-family:inherit;font-weight:600">{{ incident.title }}</a>
+          <div class="muted" style="font-size:var(--t-sm)">{{ said.means }}</div>
+          <div class="dim" style="font-size:var(--t-xs);margin-top:2px">
+            {# Symptoms in English, not as raw metric identifiers. 'Load per CPU
+               core' tells somebody something; 'load_per_core' tells them there
+               is a column they cannot read. #}
+            {{ incident.id }}
+            {% if said.symptoms %}&middot; affects {{ said.symptoms | join(', ') }}{% endif %}
+          </div>
+        </td>
+        <td class="nowrap">
+          <span class="badge {{ incident.severity }}">{{ incident.severity }}</span>
+          <div class="muted" style="font-size:var(--t-sm);margin-top:4px">{{ said.urgency.title }}</div>
+        </td>
+        {# nowrap: without it a two-digit score and its band wrap onto separate
+           lines for some rows and not others, so the column stops lining up. #}
+        <td class="num nowrap">
+          {{ incident.risk_score }}
+          <div style="margin-top:4px"><span class="badge {{ incident.risk_level }}">{{ incident.risk_level }}</span></div>
+        </td>
+        <td>
+          <span class="badge {{ incident.status }}">{{ status_label(incident.status) }}</span>
+          {# The badge above already names the state, so this line names the
+             ACT rather than repeating it -- "Waiting for you / Waiting for
+             you: Approve" was the same words twice in eight pixels. #}
+          <div class="muted" style="font-size:var(--t-sm);margin-top:4px">
+            {% if said.next_who == 'you' %}Next: <strong>{{ said.next_label }}</strong>
+            {% elif said.next_who == 'guardian' %}Guardian is working &mdash; {{ said.next_label | lower }}
+            {% else %}Nothing to do{% endif %}
+          </div>
+        </td>
+        <td class="num">{{ incident.occurrences }}&times;</td>
+        <td class="muted nowrap" style="font-size:var(--t-sm)">{{ incident.updated_human }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
+{# ===========================================================================
+   WHAT AN INCIDENT IS -- said before somebody has to ask     (Phase 9)
+   =========================================================================== #}
+<div class="section-title"><span>What these actually are</span></div>
+<div class="grid wide">
+  <div class="card">
+    <h2>1 &middot; One cause, one incident</h2>
+    <p class="muted" style="margin:0">
+      A single busy program can push load, CPU idle time and the running-process
+      count out of range at the same moment. Those are <em>symptoms</em> of one
+      condition, so they become <strong>one</strong> incident with several
+      symptoms &mdash; never four separate alarms. An alert list where one cause
+      fills four rows is one people stop reading.
+    </p>
+  </div>
+  <div class="card">
+    <h2>2 &middot; Measured against itself</h2>
+    <p class="muted" style="margin:0">
+      Nobody types a limit in. Guardian compares each measurement against
+      <em>this machine&rsquo;s own recent history</em>, which is why it can say
+      &ldquo;40% CPU is abnormal here&rdquo; on a machine that normally sits at
+      3%, and stay quiet about a disk that has been 95% full for a year.
+    </p>
+  </div>
+  <div class="card">
+    <h2>3 &middot; Nothing runs without you</h2>
+    <p class="muted" style="margin:0">
+      Investigating is read-only. Proposing a fix produces a description and
+      stops. Only <strong>Approve</strong> runs anything, and afterwards
+      Guardian re-measures the machine rather than believing the command&rsquo;s
+      exit code &mdash; a repair that reports success while the service is still
+      dead is caught there.
+    </p>
+  </div>
+  <div class="card">
+    <h2>4 &middot; It closes honestly</h2>
+    <p class="muted" style="margin:0">
+      An incident that clears on its own is closed automatically, and the
+      timeline says <em>&ldquo;returned to normal on their own; no action was
+      taken&rdquo;</em> &mdash; never that something fixed it. A repair that ran
+      and did not work leaves the incident <strong>open</strong>, deliberately.
+    </p>
+  </div>
+</div>
+
+<details style="margin-top:var(--s3)">
+  <summary>What do these words mean? ({{ glossary | length }} terms)</summary>
+  <dl class="glossary">
+    {% for term, meaning in glossary %}
+    <div><dt>{{ term }}</dt><dd>{{ meaning }}</dd></div>
+    {% endfor %}
+  </dl>
+</details>
+
+{% endblock %}

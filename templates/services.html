@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Services{% endblock %}
+{% block heading %}Services{% endblock %}
+
+{% block body %}
+{% if services.status != 'ok' %}
+  <div class="err">services.sh failed: {{ services.message }}</div>
+{% else %}
+
+<div class="note">
+  <strong>Healing is an allow-list, not a permission level.</strong>
+  Guardian may only act on services named in <code class="mono">HEALABLE_SERVICES</code>.
+  Everything else is refused by <code class="mono">healing.sh</code> itself, even if
+  the web interface asks &mdash; and services in <code class="mono">PROTECTED_SERVICES</code>
+  are refused twice over.
+</div>
+
+<div class="card">
+  <div class="t-scroll">
+  <table>
+    <thead>
+      <tr><th>Service</th><th>Description</th><th>State</th><th>Sub-state</th>
+          <th>Enabled at boot</th><th>Main PID</th><th>Active since</th>
+          <th>Healing</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for service in services.services %}
+      <tr>
+        <td class="mono">{{ service.name }}</td>
+        <td class="muted" style="font-size:var(--t-sm)">{{ service.description or '--' }}</td>
+        <td><span class="badge {{ 'PASS' if service.running else ('FAIL' if service.failed else 'WARNING') }}">
+            {{ service.active_state }}</span></td>
+        <td class="muted">{{ service.sub_state or '--' }}</td>
+        <td class="muted">{{ 'yes' if service.enabled else 'no' }}</td>
+        <td class="num mono">{{ service.main_pid or '--' }}</td>
+        <td class="muted" style="font-size:var(--t-sm)">{{ service.active_since or '--' }}</td>
+        <td>
+          {% if service.name in healable %}
+            <span class="chip">allowed</span>
+          {% else %}
+            <span class="chip">protected</span>
+          {% endif %}
+        </td>
+        <td class="right">
+          {% if service.name in healable and not service.running %}
+          <form class="inline" method="post" action="{{ url_for('heal', service_name=service.name) }}">
+            <button type="submit">Heal</button>
+          </form>
+          {% elif service.name in healable %}
+            <span class="muted" style="font-size:var(--t-sm)">running</span>
+          {% else %}
+            <span class="muted" style="font-size:var(--t-sm)">not permitted</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="section-title"><span>Failed units, machine-wide</span></div>
+<div class="card">
+  <p class="muted" style="margin:0 0 var(--s2);font-size:var(--t-sm)">
+    The table above watches the services named in <code class="mono">MONITORED_SERVICES</code>.
+    This chart counts <em>every</em> failed systemd unit on the machine &mdash; including
+    ones nobody thought to monitor, which is exactly the failure a monitored-list-only
+    design cannot see.
+  </p>
+  <svg class="chart" data-metric="failed_units" data-seconds="21600"
+       role="img" aria-label="failed systemd units, last six hours"></svg>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block script %}<script>GuardianCharts.drawAll();</script>{% endblock %}

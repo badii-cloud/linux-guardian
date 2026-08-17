@@ -1,0 +1,27 @@
+# =============================================================================
+#  Linux Guardian -- .shellcheckrc
+#
+#  shellcheck reads this file automatically: it looks in the directory of the
+#  script being checked and then in every parent directory, so it is found no
+#  matter where we run shellcheck from.
+#
+#  WHY IT EXISTS: our scripts load their settings with
+#      source "$PROJECT_ROOT/config/guardian.conf"
+#  Because that path is built from a VARIABLE, shellcheck cannot work out at
+#  lint time which file is meant, and reports SC1091 "Not following". The two
+#  settings below tell it where to look, so it follows the config file and
+#  checks it as well, instead of skipping it.
+# =============================================================================
+
+# Allow shellcheck to open and analyse files that are pulled in with `source`.
+# Equivalent to passing the -x flag on every run; putting it here means the
+# plain command `shellcheck linux/system.sh` behaves the same for everyone.
+external-sources=true
+
+# Where to resolve the relative path written in a "# shellcheck source=..."
+# directive. SCRIPTDIR is a shellcheck keyword meaning "the directory of the
+# script being checked" (here: linux/), so the directive "../config/..." in
+# system.sh resolves to <project>/config/guardian.conf.
+# Without this, shellcheck would resolve it against the terminal's current
+# working directory, which changes depending on where you launched it from.
+source-path=SCRIPTDIR

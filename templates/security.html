@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Security{% endblock %}
+{% block heading %}Security{% endblock %}
+
+{% block body %}
+
+{# ---------------------------------------------------------------------------
+   WHAT "SECURITY" MEANS HERE, stated plainly rather than implied by a red box.
+   These are DETECTION SIGNALS, not proof of anything. A new listening port is
+   usually a service starting; a second login is usually the same person. The
+   page says so, because a security dashboard that implies compromise every time
+   something changes is a dashboard that gets ignored.
+   --------------------------------------------------------------------------- #}
+<div class="note">
+  <strong>These are signals, not verdicts.</strong>
+  A changed listening port is usually a service starting; an extra session is
+  usually the same person opening a terminal. Guardian flags the
+  <em>change</em> because only a baseline can notice one &mdash; deciding what it
+  means is still a human&rsquo;s job.
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>Security incidents open</h2>
+    <div class="big">{{ incidents | selectattr('open') | list | length }}</div>
+    <div class="sub">of {{ incidents | length }} ever recorded</div>
+  </div>
+  {% for level in ['CRITICAL', 'HIGH', 'MEDIUM'] %}
+  <div class="card">
+    <h2>{{ level | lower | capitalize }}</h2>
+    <div class="big {{ 'muted' if not (incidents | selectattr('open') | selectattr('severity','equalto',level) | list | length) }}">
+      {{ incidents | selectattr('open') | selectattr('severity','equalto',level) | list | length }}</div>
+    <div class="sub">open security findings</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="section-title"><span>Exposure &mdash; what this machine is listening on</span></div>
+<div class="grid two">
+  <div class="card">
+    <h2>Listening sockets</h2>
+    <svg class="chart" data-metric="listening_sockets" data-seconds="86400"
+         role="img" aria-label="listening sockets over the last day"></svg>
+    <div class="sub">
+      There is no correct <em>number</em> of open ports to alarm on &mdash; it
+      depends entirely on the machine. What is always interesting is that the
+      number changed, and only a baseline can see that.
+    </div>
+  </div>
+  <div class="card">
+    <h2>Login sessions</h2>
+    <svg class="chart" data-metric="login_sessions" data-seconds="86400"
+         role="img" aria-label="login sessions over the last day"></svg>
+    <div class="sub">
+      Sessions, not distinct users: one person with three terminals is three.
+      Counting usernames would hide a second login by the same account, which
+      for a security signal is the wrong way to be wrong.
+    </div>
+  </div>
+</div>
+
+<div class="section-title"><span>Security-relevant incident types</span></div>
+<div class="card">
+  <p class="muted" style="margin:0 0 var(--s2);font-size:var(--t-sm)">
+    Declared in <code class="mono">linux/incidents.json</code>. A type marked
+    security-relevant is raised one severity step higher and weighted in the risk
+    score, so a security signal cannot be scored away as background noise.
+  </p>
+  <div class="t-scroll">
+  <table>
+    <thead><tr><th>Type</th><th>Watches</th><th>Base severity</th><th>What it means</th></tr></thead>
+    <tbody>
+      {% for type in types %}
+      <tr>
+        <td class="mono">{{ type.id }}</td>
+        <td class="mono muted" style="font-size:var(--t-sm)">{{ type.symptoms | join(', ') }}</td>
+        <td><span class="badge {{ type.base_severity }}">{{ type.base_severity }}</span></td>
+        <td class="muted" style="font-size:var(--t-sm)">{{ type.description }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="section-title"><span>Security findings</span></div>
+{% if not incidents %}
+  <div class="card"><p class="muted" style="margin:0">
+    No security incident has been raised. That is the expected state &mdash; these
+    types fire on a <em>change</em> in exposure or login activity, not on a level.
+  </p></div>
+{% else %}
+<div class="card">
+  <div class="t-scroll">
+  <table>
+    <thead><tr><th>Incident</th><th>Title</th><th>Severity</th><th class="num">Risk</th>
+               <th>Status</th><th class="num">Seen</th><th>First seen</th></tr></thead>
+    <tbody>
+      {% for incident in incidents %}
+      <tr>
+        <td class="nowrap"><a href="{{ url_for('incident_page', incident_id=incident.id) }}">{{ incident.id }}</a></td>
+        <td>{{ incident.title }}</td>
+        <td><span class="badge {{ incident.severity }}">{{ incident.severity }}</span></td>
+        <td class="num">{{ incident.risk_score }}</td>
+        <td><span class="badge {{ incident.status }}">{{ status_label(incident.status) }}</span></td>
+        <td class="num">{{ incident.occurrences }}</td>
+        <td class="muted nowrap" style="font-size:var(--t-sm)">{{ incident.created_human }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="section-title"><span>Refusals are evidence</span></div>
+<div class="card">
+  <p class="muted" style="margin:0">
+    Every action Guardian refuses &mdash; a service outside the allow-list, a
+    filename that climbs out of the sandbox, an approval naming an action the
+    incident never recommended &mdash; is written to the audit trail and to the
+    incident&rsquo;s own timeline. A refusal is not an error to discard; somebody
+    attempting something that is not permitted is exactly the event worth finding
+    later. See the <a href="{{ url_for('logs') }}" style="color:var(--accent)">audit log</a>.
+  </p>
+</div>
+
+{% endblock %}
+
+{% block script %}<script>GuardianCharts.drawAll();</script>{% endblock %}

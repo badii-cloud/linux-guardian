@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Automation{% endblock %}
+{% block heading %}Automation{% endblock %}
+
+{% block body %}
+
+<div class="grid">
+  <div class="card">
+    <h2>Monitoring interval</h2>
+    <div class="big">{{ settings.DAEMON_INTERVAL or '30' }}s</div>
+    <div class="sub">between samples and service checks</div>
+  </div>
+  <div class="card">
+    <h2>Collection</h2>
+    <div class="big">{{ 'on' if settings.DAEMON_COLLECT == '1' else 'off' }}</div>
+    <div class="sub">history feeds anomaly detection</div>
+  </div>
+  <div class="card">
+    <h2>Auto-healing target</h2>
+    <div class="big mono" style="font-size:var(--t-xl)">{{ settings.DAEMON_SERVICE or '--' }}</div>
+    <div class="sub">still checked against the allow-list every time</div>
+  </div>
+  <div class="card">
+    <h2>Retention</h2>
+    <div class="big">{{ settings.HISTORY_RETENTION_HOURS or '168' }}h</div>
+    <div class="sub">or {{ '{:,}'.format(settings.HISTORY_MAX_ROWS | int) if settings.HISTORY_MAX_ROWS else '1,000,000' }} rows, whichever comes first</div>
+  </div>
+</div>
+
+<div class="section-title"><span>The history store</span></div>
+<div class="card">
+  {% if not store %}
+    <p class="muted" style="margin:0">The history database could not be read.</p>
+  {% else %}
+  <div class="t-scroll">
+  <table>
+    <tr><th style="width:220px">Database</th><td class="mono">{{ store.database }}</td></tr>
+    <tr><th>Schema version</th><td>{{ store.schema_version }}</td></tr>
+    <tr><th>Samples stored</th><td>{{ '{:,}'.format(store.samples) }} readings across {{ '{:,}'.format(store.ticks) }} ticks</td></tr>
+    <tr><th>Covering</th><td>{{ (store.span_seconds // 3600) }}h {{ ((store.span_seconds % 3600) // 60) }}m of history</td></tr>
+    <tr><th>Size on disk</th><td>{{ (store.bytes / 1024) | round | int }} KB
+        {%- if store.wal_bytes %} + {{ (store.wal_bytes / 1024) | round | int }} KB write-ahead log{% endif %}</td></tr>
+  </table>
+  </div>
+  {% endif %}
+</div>
+
+<div class="section-title"><span>The daemon</span></div>
+<div class="card">
+  <h2>What it does</h2>
+  <p style="margin:0 0 var(--s2)">
+    The daemon is an <strong>optional background worker</strong>. Every
+    {{ settings.DAEMON_INTERVAL or '30' }} seconds it does this:
+    <strong>record a small health sample → check the allowed service → restart it only if it is down.</strong>
+  </p>
+  <div class="note" style="margin-bottom:var(--s2)">
+    You do not need the daemon to use the dashboard. Turn it on only when you
+    want Guardian to keep collecting history and watch the approved service
+    while the web page is closed.
+  </div>
+  <p class="muted" style="margin:0 0 var(--s2)">
+    Recording history is helpful but never more important than recovery: if the
+    database is unavailable, Guardian logs that problem and continues checking
+    the permitted service.
+  </p>
+  <details>
+    <summary class="mono">I understand — show the four installation commands</summary>
+    <p class="muted" style="font-size:var(--t-sm)">Run these once in a terminal. They install the service, let systemd discover it, start it now, and then show its live log.</p>
+    <pre>sudo install -m 0644 systemd/linux-guardian.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now linux-guardian
+journalctl -u linux-guardian -f</pre>
+  </details>
+  <p class="muted" style="margin:var(--s2) 0 0;font-size:var(--t-sm)">
+    For a short demo, run <code class="mono">./linux/guardian-daemon.sh</code>
+    in a terminal and press Ctrl-C when finished. It is not installed by default.
+  </p>
+</div>
+
+<div class="section-title"><span>Scheduled tasks</span></div>
+<div class="card">
+  <p class="muted" style="margin:0 0 var(--s2);font-size:var(--t-sm)">
+    <strong>systemd <em>user</em> timers, never root cron.</strong> A user unit needs
+    no sudo, runs as this user, and can only touch files this user could already
+    touch. A root crontab entry would mean the web application could schedule work
+    as root &mdash; the exact privilege escalation the whole safety model exists to
+    prevent.
+  </p>
+  {% if not schedules %}
+    <p class="muted" style="margin:0">No timers scheduled. Create one from the
+      <a href="{{ url_for('console') }}" style="color:var(--accent)">Assistant</a>.</p>
+  {% else %}
+  <div class="t-scroll">
+  <table>
+    <thead><tr><th>Name</th><th>When</th><th>Next run</th><th>Unit</th></tr></thead>
+    <tbody>
+      {% for schedule in schedules %}
+      <tr>
+        <td class="mono">{{ schedule.name or schedule.get('unit', '--') }}</td>
+        <td>{{ schedule.calendar or schedule.get('on_calendar', '--') }}</td>
+        <td class="muted">{{ schedule.next_run or schedule.get('next', '--') }}</td>
+        <td class="mono muted" style="font-size:var(--t-sm)">{{ schedule.unit or '--' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="muted" style="margin:var(--s2) 0 0;font-size:var(--t-sm)">
+    User timers only run while this user has a session &mdash;
+    <code class="mono">Linger=no</code> on this VM.
+  </p>
+  {% endif %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Logs &middot; Linux Guardian{% endblock %}
+{% block body %}
+<h2 class="section-title">Audit log</h2>
+<p class="sub" style="margin-top:0">
+  Newest first, last 200 lines of <span class="mono">{{ log_path }}</span>.
+  Written by <span class="mono">healing.sh</span> and
+  <span class="mono">guardian-daemon.sh</span>. Refusals are recorded here too:
+  the log must be able to prove the tool never touched a protected service.
+</p>
+<div class="card">
+{% if lines %}
+  <pre>{% for line in lines %}{{ line }}
+{% endfor %}</pre>
+{% else %}
+  <p class="muted">The log is empty. It is created the first time a healing action runs.</p>
+{% endif %}
+</div>
+{% endblock %}

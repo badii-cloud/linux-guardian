@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Heal {{ service }} &middot; Linux Guardian{% endblock %}
+{% block body %}
+<h2 class="section-title">Healing result: <span class="mono">{{ service }}</span></h2>
+{% if result.status != 'ok' %}
+  <div class="err"><strong>healing.sh failed:</strong> {{ result.message }}</div>
+{% else %}
+<div class="card">
+  <div class="big" style="font-size:var(--t-xl);color:{{ 'var(--pass)' if result.healthy else 'var(--fail)' }}">
+    {{ result.result|replace('_',' ')|upper }}
+  </div>
+  <p class="sub">{{ result.message }}</p>
+  <table style="margin-top:var(--s2)">
+    <tr><th>Unit</th><td class="mono">{{ result.unit }}</td></tr>
+    <tr><th>Allowed</th><td>{{ 'yes' if result.allowed else 'no — refused by the safety lists' }}</td></tr>
+    <tr><th>Action taken</th><td class="mono">{{ result.action }}</td></tr>
+    <tr><th>State before</th><td class="mono">{{ result.state_before or '—' }}</td></tr>
+    <tr><th>State after</th><td class="mono">{{ result.state_after or '—' }}</td></tr>
+    {% if result.verify_attempts is defined %}
+    <tr><th>Verify attempts</th><td>{{ result.verify_attempts }}</td></tr>
+    <tr><th>Duration</th><td>{{ result.duration_seconds }} s</td></tr>
+    {% endif %}
+  </table>
+</div>
+{% endif %}
+<p class="sub" style="margin-top:var(--s3)">
+  <a href="{{ url_for('dashboard') }}" style="color:var(--accent)">&larr; back to dashboard</a> &middot;
+  <a href="{{ url_for('logs') }}" style="color:var(--accent)">view the log</a>
+</p>
+{% endblock %}

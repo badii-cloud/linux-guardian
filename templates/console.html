@@ -1,0 +1,934 @@
+{% extends "base.html" %}
+{% block title %}Console — Linux Guardian{% endblock %}
+
+{# ===========================================================================
+   PRESENTATION MACROS
+
+   A module answers in JSON because Flask has to parse it. A PERSON should not
+   have to. These macros turn each module's output into something readable, and
+   the raw JSON stays one click away in a collapsed panel underneath -- so the
+   page is presentable to a marker and still shows the real evidence on demand.
+   =========================================================================== #}
+
+{# A list of (label, value) pairs. A row with nothing worth showing is skipped
+   entirely rather than printed as "None", which is what a bare {{ }} would do
+   with a JSON null.
+
+   THE `is defined` CHECK IS NOT REDUNDANT, and this cost a real bug. A module
+   may omit a key rather than send it as null: healing.sh drops
+   verify_attempts and duration_seconds entirely when a service was already
+   healthy, because it never verified and never timed anything. Jinja turns a
+   MISSING key into Undefined, not None -- and `Undefined is not none` is
+   TRUE -- so a none-only guard let those rows through and printed a label with
+   an empty value beside it. All three conditions are needed:
+     is defined   the key existed at all
+     is not none  it was not JSON null
+     != ''        it was not an empty string #}
+{% macro facts(rows) %}
+<dl class="facts">
+  {% for label, value in rows %}
+    {% if value is defined and value is not none and value != '' %}
+    <dt>{{ label }}</dt><dd>{{ value }}</dd>
+    {% endif %}
+  {% endfor %}
+</dl>
+{% endmacro %}
+
+{# A percentage with a bar.
+   THE BAR IS ACCENT BLUE, NEVER GREEN/AMBER/RED, and that is deliberate:
+   check_disk MEASURES, it does not judge. Colouring it by threshold would mean
+   this template re-implementing the verdict logic that lives in diagnosis.sh,
+   which is the duplication the dashboard was careful to avoid. If you want a
+   verdict, ask for one -- "run a full health check". #}
+{% macro gauge(percent, caption) %}
+<div class="gauge">
+  <div class="gauge-num">{{ percent }}<span>%</span></div>
+  <div class="gauge-bar"><i style="width:{{ [percent, 100]|min }}%"></i></div>
+  <div class="gauge-cap">{{ caption }}</div>
+</div>
+{% endmacro %}
+
+{# The raw module output, collapsed. Kept because this is coursework: the whole
+   point of the architecture is that a Bash script produced this JSON, and being
+   able to show that on demand is worth more than hiding it. #}
+{% macro raw(data) %}
+<details class="raw">
+  <summary>Raw JSON from the module</summary>
+  <pre>{{ data | tojson(indent=2) }}</pre>
+</details>
+{% endmacro %}
+
+{% block style %}
+<style>
+/* ---------------------------------------------------------------------------
+   CONSOLE-SPECIFIC RULES.
+   base.html owns the palette and the shared components; this block only adds
+   what the console needs, so nothing here can change how another page looks.
+   --------------------------------------------------------------------------- */
+.ask { display:flex; gap:var(--s1); margin-bottom:var(--s3); }
+.ask input {
+  flex:1; background:var(--panel); color:var(--text);
+  border:1px solid var(--line); border-radius:var(--radius-sm);
+  padding:12px var(--s2); font-size:var(--t-md);
+  font-family:inherit;
+}
+.ask button { padding:var(--s1) var(--s3); font-size:var(--t-md); }
+
+/* The result card carries a coloured left edge, and the colours obey the same
+   discipline as the rest of the site:
+     green  the action ran and succeeded            -> an outcome
+     red    the action was refused or failed        -> an outcome
+     blue   Guardian needs an answer from you       -> NOT an outcome, so it
+            uses the accent rather than amber. "Confirm this" and "which did
+            you mean" are questions, not warnings about the health of the
+            machine, and amber here would dilute what amber means everywhere
+            else on the dashboard. */
+.res { border-left:3px solid var(--line); }
+.res.ok, .res.done { border-left-color:var(--pass); }
+.res.preview, .res.ambiguous { border-left-color:var(--accent); }
+.res.invalid, .res.failed, .res.no_match { border-left-color:var(--fail); }
+
+.kv { display:grid; grid-template-columns:max-content 1fr; gap:var(--s1) var(--s2);
+      font-size:var(--t-md); margin:var(--s1) 0 0; }
+.kv dt { color:var(--muted); }
+.kv dd { margin:0; min-width:0; overflow-wrap:anywhere; }
+
+.pick { display:flex; flex-wrap:wrap; gap:var(--s1); margin-top:var(--s2); }
+.pick button { background:var(--panel2); color:var(--text);
+               border:1px solid var(--line); font-weight:600; }
+.pick button:hover { border-color:var(--accent); filter:none; }
+
+.acts { display:grid; gap:var(--s1); grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); }
+.act { display:flex; gap:var(--s1); align-items:baseline; padding:var(--s1);
+       border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--panel2); }
+.act code { color:var(--accent); font-size:var(--t-sm); }
+.act small { color:var(--muted); font-size:var(--t-sm); }
+
+/* read/write tags. 'read' borrows no status colour at all -- it is a category,
+   not a verdict -- and 'write' is the accent for the same reason the Confirm
+   button is. Only the badge classes (PASS/WARNING/FAIL) carry status colour. */
+.tag { font-size:var(--t-xs); font-weight:700; letter-spacing:.5px;
+       padding:2px 6px; border-radius:4px; text-transform:uppercase; }
+.tag.read  { background:var(--panel2); color:var(--muted); }
+.tag.write { background:rgba(88,166,255,.15); color:var(--accent); }
+
+details { margin-top:var(--s3); }
+summary { cursor:pointer; color:var(--muted); font-size:var(--t-md); padding:var(--s1) 0; }
+summary:hover { color:var(--text); }
+
+.hist { font-size:var(--t-sm); }
+.hist li { padding:var(--s1) 0; border-bottom:1px solid var(--line); list-style:none; }
+.hist li:last-child { border-bottom:none; }
+.hist ul { margin:0; padding:0; }
+
+/* The confirm row.
+   COLOUR DISCIPLINE: Confirm is the accent blue, NOT amber, even though amber
+   would read as "careful". Amber on this page means WARNING -- a health
+   verdict -- and a button that borrows it teaches the user that amber is
+   sometimes just decoration. The button is distinguished by size and position
+   instead, which costs nothing and keeps the status colours honest. */
+.confirm { display:flex; align-items:center; gap:var(--s2); flex-wrap:wrap; }
+.confirm form { margin:0; }
+.confirm .go { padding:var(--s1) var(--s3); font-size:var(--t-md); }
+.confirm .cancel {
+  color:var(--muted); text-decoration:none; font-size:var(--t-sm); font-weight:600;
+  padding:var(--s1) 14px; border:1px solid var(--line); border-radius:var(--radius-sm);
+}
+.confirm .cancel:hover { color:var(--text); border-color:var(--muted); }
+
+/* ---------------------------------------------------------------------------
+   THE ANSWER PANEL. A module replies in JSON because Flask has to parse it; a
+   person should not have to read it. These are the components that turn each
+   reply into something presentable.
+   --------------------------------------------------------------------------- */
+.answer { margin-top:var(--s2); display:flex; flex-direction:column; gap:var(--s2); }
+
+/* label / value rows. Two columns on a desktop, stacked on a phone. */
+.facts { display:grid; grid-template-columns:max-content 1fr;
+         gap:var(--s1) var(--s2); margin:0; font-size:var(--t-md); }
+.facts dt { color:var(--muted); }
+.facts dd { margin:0; min-width:0; overflow-wrap:anywhere; font-family:var(--mono);
+            font-size:var(--t-sm); }
+
+/* a percentage with a bar. Accent blue, never a status colour -- see the
+   macro comment: a read action measures, it does not judge. */
+.gauge { display:flex; flex-direction:column; gap:var(--s1); }
+.gauge-num { font-size:2rem; font-weight:600; line-height:1;
+             font-variant-numeric:tabular-nums; }
+.gauge-num span { font-size:var(--t-md); color:var(--muted); margin-left:2px; }
+.gauge-bar { height:6px; background:var(--panel2); border-radius:3px; overflow:hidden; }
+.gauge-bar i { display:block; height:100%; background:var(--accent); border-radius:3px; }
+.gauge-cap { color:var(--muted); font-size:var(--t-sm); }
+
+/* the headline of an answer: a status badge and the sentence beside it */
+.verdict { display:flex; align-items:center; gap:var(--s2); flex-wrap:wrap; }
+.verdict-text { color:var(--muted); font-size:var(--t-md); }
+.score { font-size:1.75rem; font-weight:600; font-variant-numeric:tabular-nums; }
+.score span { font-size:var(--t-md); color:var(--muted); }
+
+/* the raw JSON, collapsed. Kept because this is coursework -- being able to
+   show the actual Bash output on demand is worth more than hiding it. */
+.raw { margin-top:var(--s2); }
+.raw summary { font-size:var(--t-sm); }
+.raw pre { margin-top:var(--s1); }
+
+@media (max-width:768px) {
+  .ask { flex-direction:column; }
+  .acts { grid-template-columns:1fr; }
+  .facts { grid-template-columns:1fr; gap:2px var(--s2); }
+  .facts dd { margin-bottom:var(--s1); }
+}
+</style>
+{% endblock %}
+
+{% block body %}
+
+<form class="ask" method="post" action="{{ url_for('console_run') }}">
+  {# autofocus puts the cursor here on load, and type=text in a form means the
+     Enter key submits with no JavaScript at all -- which is the requirement,
+     and also means the console still works if scripting is blocked. #}
+  <input type="text" name="q" id="ask" autofocus autocomplete="off"
+         placeholder="Ask something — e.g. how full is my disk"
+         value="{{ result.query if result and result.query else '' }}">
+  <button type="submit">Run</button>
+</form>
+
+{# ---------------------------------------------------------------------------
+   THE LIVE READING                                          (Phase 9)
+
+   As the user types, this line says which action the sentence resolves to and
+   what Bash command that becomes -- BEFORE anything is submitted. It is filled
+   in by JavaScript from /api/console/translate, which runs the matcher and the
+   validator and then stops.
+
+   IT IS EMPTY WITHOUT JAVASCRIPT, and that is correct rather than a gap: the
+   page below already answers the same question statically, and this only saves
+   a round trip. Nothing on this page depends on it.
+   --------------------------------------------------------------------------- #}
+<div class="reading" id="reading" aria-live="polite"></div>
+
+{# ---------------------------------------------------------------------------
+   STARTER PHRASES
+
+   Real forms, not JavaScript buttons, so they submit with scripting disabled.
+   With scripting on they fill the box instead, so the user can edit the
+   sentence before running it -- which is the more useful behaviour and also
+   teaches that the words are ordinary English, not magic tokens.
+   --------------------------------------------------------------------------- #}
+<div class="starters">
+  {% for phrase in ['how full is my disk', 'how busy is the cpu',
+                    'is apache2 running', 'show the top processes',
+                    'run a full health check', 'list my files'] %}
+  <form method="post" action="{{ url_for('console_run') }}">
+    <input type="hidden" name="q" value="{{ phrase }}">
+    <button type="submit" data-fill="{{ phrase }}">{{ phrase }}</button>
+  </form>
+  {% endfor %}
+</div>
+
+
+{# ======================= THE RESULT ======================= #}
+{% if result %}
+<div class="card res {{ result.state }}">
+
+  {# --- nothing typed --- #}
+  {% if result.state == 'empty' %}
+    <h2>Nothing to do</h2>
+    <p class="muted">Type a request above, or open the reference below.</p>
+
+  {# --- matched nothing at all --- #}
+  {% elif result.state == 'no_match' %}
+    <h2>Not understood</h2>
+    <p>Guardian does not recognise <span class="mono">{{ result.query }}</span>.</p>
+    <p class="muted">It will not guess. Open “Available actions” below to see
+       everything it can do.</p>
+    {# Say what was tried, so a dead end is informative rather than blank. #}
+    <dl class="kv" style="margin-top:var(--s2)">
+      <dt>Keyword matcher</dt><dd class="muted">no trigger phrase matched</dd>
+      <dt>Local model</dt>
+      <dd class="muted">{{ result.ollama_detail or 'not consulted' }}</dd>
+    </dl>
+
+  {# --- matched, but not confidently enough to act --- #}
+  {% elif result.state == 'ambiguous' %}
+    <h2>Did you mean</h2>
+    <p class="muted">No single action scored above {{ threshold }}, so Guardian
+       is asking rather than choosing.</p>
+    <div class="pick">
+      {% for c in result.candidates %}
+      <form method="post" action="{{ url_for('console_run') }}">
+        <input type="hidden" name="q" value="{{ result.query }}">
+        <input type="hidden" name="action_id" value="{{ c.id }}">
+        <button type="submit">
+          {{ c.id }} <span class="tag {{ c.danger }}">{{ c.danger }}</span>
+          <span class="muted">{{ c.confidence }}</span>
+        </button>
+      </form>
+      {% endfor %}
+    </div>
+
+  {# --- understood, but a parameter was not acceptable --- #}
+  {% elif result.state == 'invalid' %}
+    <h2>Refused</h2>
+    <p>Understood as <span class="mono">{{ result.action_id }}</span>, but the
+       request was rejected before anything ran:</p>
+    {% for e in result.errors %}<div class="err">{{ e }}</div>{% endfor %}
+
+  {# --- a write action: preview only, never executed on the first request --- #}
+  {% elif result.state == 'preview' %}
+    <h2>Confirm</h2>
+    <dl class="kv">
+      <dt>Understood as</dt><dd class="mono">{{ result.action_id }}
+        <span class="tag write">write</span></dd>
+      {% for label, value in result.effect %}
+      <dt>{{ label }}</dt><dd class="mono">{{ value }}</dd>
+      {% endfor %}
+      {# The argv Guardian will actually execute. Labelled 'Script' so it does
+         not collide with the higher-level 'Command' row that describe_effect
+         adds -- that one names the systemd command the script will run, which
+         is what the user cares about; this one is the literal call. #}
+      <dt>Script</dt><dd><pre>{{ result.command | join(' ') }}</pre></dd>
+    </dl>
+
+    <p class="muted" style="margin:var(--s2) 0">
+      This changes the system, so nothing has run yet.
+    </p>
+
+    <div class="confirm">
+      {# The parameters are posted back as hidden fields. They are re-validated
+         from scratch by the confirm route -- this form is a convenience, not a
+         trusted channel. #}
+      <form method="post" action="{{ url_for('console_confirm') }}">
+        <input type="hidden" name="q" value="{{ result.query }}">
+        <input type="hidden" name="action_id" value="{{ result.action_id }}">
+        {% for k, v in result.params.items() %}
+        <input type="hidden" name="console_param_{{ k }}" value="{{ v }}">
+        {% endfor %}
+        <button type="submit" class="go">Confirm</button>
+      </form>
+      <a class="cancel" href="{{ url_for('console') }}">Cancel</a>
+      <span class="muted" style="font-size:var(--t-sm)">or press Esc</span>
+    </div>
+
+  {# --- a confirmed write action that succeeded --- #}
+  {% elif result.state == 'done' %}
+    {% set d = result.data %}
+    <h2>Done</h2>
+
+    {# The module's own sentence is the headline. Every write module already
+       returns a plain-English `message` -- reusing it means the console and the
+       audit log say exactly the same thing about what happened. #}
+    <div class="verdict">
+      <span class="badge PASS">{{ d.result if d.result is defined else 'ok' }}</span>
+      <span class="verdict-text">{{ d.message }}</span>
+    </div>
+
+    <div class="answer">
+    {% if result.action_id == 'create_file' %}
+      {{ facts([('File', d.path),
+                ('Size', d.bytes ~ ' bytes'),
+                ('Existed before', 'yes — replaced' if d.existed else 'no — created')]) }}
+
+    {% elif result.action_id == 'schedule_file' %}
+      {{ facts([('Writes to', workspace ~ '/' ~ d.name ~ '.txt'),
+                ('Runs', d.on_calendar),
+                ('Next run', d.next_run),
+                ('Timer', d.timer_unit ~ ' (' ~ d.active_state ~ ')'),
+                ('Timer file', d.timer_file),
+                ('Service file', d.service_file)]) }}
+      <p class="muted">Check it yourself with
+         <span class="mono">systemctl --user list-timers</span>.</p>
+
+    {% elif result.action_id == 'cancel_schedule' %}
+      {{ facts([('Removed', d.timer_unit),
+                ('Kept', 'the file it produced, in the workspace')]) }}
+
+    {% elif result.action_id == 'heal_service' %}
+      {# .get() rather than .attribute for the two optional fields: healing.sh
+         omits them on the already_healthy path, and .get() turns a missing key
+         into a clean None instead of an Undefined that renders as " s". #}
+      {{ facts([('Service', d.unit),
+                ('Was', d.state_before),
+                ('Now', d.state_after),
+                ('Action taken', d.action),
+                ('Verify attempts', d.get('verify_attempts')),
+                ('Took', (d.duration_seconds ~ ' s') if d.get('duration_seconds') is not none else none)]) }}
+
+    {% else %}
+      {{ facts(d.items() | list) }}
+    {% endif %}
+    </div>
+    {{ raw(result.data) }}
+
+  {# --- a read action that failed --- #}
+  {% elif result.state == 'failed' %}
+    <h2>Failed</h2>
+    <p class="mono">{{ result.action_id }}</p>
+    <div class="err">{{ result.message }}</div>
+
+  {# --- a read action that worked --- #}
+  {% else %}
+    <h2>{{ result.description }}</h2>
+    <dl class="kv">
+      <dt>Understood as</dt>
+      <dd class="mono">{{ result.action_id }}
+          <span class="tag read">read</span></dd>
+      <dt>Why</dt>
+      <dd class="muted">{{ result.source }}, confidence {{ result.confidence }}</dd>
+      {% if result.params %}
+      {% for k, v in result.params.items() %}
+      <dt>{{ k }}</dt><dd class="mono">{{ v }}</dd>
+      {% endfor %}
+      {% endif %}
+    </dl>
+
+    {# =====================================================================
+       THE ANSWER, RENDERED FOR A PERSON.
+
+       Each action gets the presentation its data deserves: a percentage gets a
+       gauge, a list gets a table, a service gets its state. The fallback at the
+       end handles anything not named here, so adding an action to the registry
+       can never produce a blank panel.
+       ===================================================================== #}
+    {% set d = result.data %}
+    <div class="answer">
+
+    {% if result.action_id == 'check_disk' %}
+      {{ gauge(d.usage_percent, 'of ' ~ d.total_gb ~ ' GB used on ' ~ d.mount_point) }}
+      {{ facts([('Used', d.used_gb ~ ' GB'),
+                ('Free', d.free_gb ~ ' GB'),
+                ('Total', d.total_gb ~ ' GB'),
+                ('Filesystem', d.mount_point)]) }}
+
+    {% elif result.action_id == 'check_memory' %}
+      {{ gauge(d.usage_percent, 'of ' ~ d.total_mb ~ ' MB in use') }}
+      {{ facts([('Used', d.used_mb ~ ' MB'),
+                ('Available', d.available_mb ~ ' MB'),
+                ('Total', d.total_mb ~ ' MB')]) }}
+
+    {% elif result.action_id == 'check_cpu' %}
+      {{ gauge(d.usage_percent, 'across ' ~ d.cores ~ ' cores') }}
+      {{ facts([('Cores', d.cores)]) }}
+
+    {% elif result.action_id == 'check_network' %}
+      <div class="verdict">
+        <span class="badge {{ 'PASS' if d.connectivity.reachable else 'FAIL' }}">
+          {{ 'reachable' if d.connectivity.reachable else 'unreachable' }}</span>
+        <span class="verdict-text">gateway {{ d.connectivity.target }}</span>
+      </div>
+      {{ facts([('Interface', d.interface.name ~ ' (' ~ d.interface.state ~ ')'),
+                ('IP address', d.interface.ip_address ~ '/' ~ d.interface.prefix_length),
+                ('Netmask', d.interface.netmask),
+                ('MAC', d.interface.mac_address),
+                ('Gateway', d.gateway),
+                ('DNS', d.dns_servers | join(', ')),
+                ('Packet loss', d.connectivity.packet_loss_percent ~ '%'),
+                ('Latency', d.connectivity.avg_latency_ms ~ ' ms')]) }}
+
+    {% elif result.action_id == 'check_service' %}
+      <div class="verdict">
+        {# The same PASS/FAIL/WARNING mapping the dashboard uses, from the
+           module's own booleans -- not a new judgement invented here. #}
+        <span class="badge {{ 'PASS' if d.running else 'FAIL' if d.failed or not d.installed else 'WARNING' }}">
+          {{ 'not installed' if not d.installed else (d.active_state or 'unknown') }}</span>
+        <span class="verdict-text">{{ d.description or d.name }}</span>
+      </div>
+      {{ facts([('Unit', d.unit),
+                ('State', d.active_state ~ ' (' ~ d.sub_state ~ ')'),
+                ('At boot', d.enabled_state),
+                ('Main PID', d.main_pid),
+                ('Active since', d.active_since)]) }}
+
+    {% elif result.action_id == 'list_processes' %}
+      <div class="t-scroll">
+        <table>
+          <thead><tr><th class="num">#</th><th class="num">PID</th><th>Name</th>
+                     <th class="num">CPU&nbsp;%</th><th class="num">Memory&nbsp;MB</th></tr></thead>
+          <tbody>
+          {% for p in d %}
+            <tr>
+              <td class="num muted">{{ p.rank }}</td>
+              <td class="num mono">{{ p.pid }}</td>
+              <td class="mono">{{ p.name }}</td>
+              <td class="num">{{ p.cpu_percent }}</td>
+              <td class="num">{{ p.memory_mb }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+    {% elif result.action_id == 'run_diagnosis' %}
+      <div class="verdict">
+        <span class="score">{{ d.score }}<span>/100</span></span>
+        <span class="badge {{ d.grade }}">{{ d.grade }}</span>
+        <span class="verdict-text">{{ d.summary.passed }} passed &middot;
+          {{ d.summary.warning }} warning &middot; {{ d.summary.failed }} failed</span>
+      </div>
+      <div class="t-scroll">
+        <table>
+          <thead><tr><th>Check</th><th>Result</th><th class="num">Value</th><th>Detail</th></tr></thead>
+          <tbody>
+          {% for c in d.checks %}
+            <tr>
+              <td>{{ c.label }}</td>
+              <td><span class="badge {{ c.result }}">{{ c.result }}</span></td>
+              <td class="num">{{ (c.value ~ ' ' ~ c.unit) if c.value is not none else '—' }}</td>
+              <td class="muted">{{ c.message }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+    {% elif result.action_id == 'list_schedules' %}
+      {% if d.count == 0 %}
+        <p class="muted">No schedules. Ask for one, e.g.
+           <span class="mono">create a file named report every monday at 9am</span>.</p>
+      {% else %}
+      <div class="t-scroll">
+        <table>
+          <thead><tr><th>Name</th><th>Runs</th><th>State</th><th>Next</th></tr></thead>
+          <tbody>
+          {% for s in d.schedules %}
+            <tr>
+              <td class="mono">{{ s.name }}</td>
+              <td>{{ s.on_calendar }}</td>
+              <td><span class="badge {{ 'PASS' if s.active_state == 'active' else 'WARNING' }}">{{ s.active_state }}</span></td>
+              <td class="muted">{{ s.next_run or '—' }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
+    {% elif result.action_id == 'list_files' %}
+      {% if d.count == 0 %}
+        <p class="muted">The workspace is empty. Create something with
+           <span class="mono">create a file called notes</span>.</p>
+      {% else %}
+      <div class="t-scroll">
+        <table>
+          <thead><tr><th>Name</th><th>File</th><th class="num">Bytes</th><th>Modified</th></tr></thead>
+          <tbody>
+          {% for f in d.files %}
+            <tr>
+              <td class="mono">{{ f.name }}</td>
+              <td class="mono muted">{{ f.file }}</td>
+              <td class="num">{{ f.bytes }}</td>
+              <td class="muted">{{ f.modified }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+      <p class="muted" style="margin-top:var(--s1)">
+        {{ d.count }} file{{ '' if d.count == 1 else 's' }},
+        {{ d.total_bytes }} bytes, in <span class="mono">{{ d.workspace }}</span>.
+        This is the only directory Guardian can read or write.
+      </p>
+
+    {% elif result.action_id == 'show_logs' %}
+      <pre>{% for line in d.lines %}{{ line }}
+{% endfor %}</pre>
+
+    {% else %}
+      {# Anything the registry gains later still renders as readable rows
+         rather than a blank panel. #}
+      {% if d is mapping %}
+        {{ facts(d.items() | list) }}
+      {% else %}
+        <pre>{{ d | tojson(indent=2) }}</pre>
+      {% endif %}
+    {% endif %}
+
+    </div>
+    {{ raw(result.data) }}
+  {% endif %}
+
+</div>
+{% endif %}
+
+
+{# ======================= HISTORY ======================= #}
+{% if history %}
+<details open>
+  <summary>This session ({{ history | length }})</summary>
+  <div class="card hist">
+    <ul>
+      {% for h in history %}
+      <li>
+        <span class="mono">{{ h.action_id }}</span>
+        <span class="muted">— {{ h.query }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</details>
+{% endif %}
+
+
+{# ===========================================================================
+   THE GUIDED BUILDER                                         (Phase 9)
+
+   The answer to "I do not know what to type". Every action in the registry
+   gets a card. Open one and it shows, in this order:
+
+     what it is for          one sentence, in terms of a reason to press it
+     the fields it needs     each with the rule it will be judged by, BEFORE
+                             the user types rather than after they are refused
+     the translation         the English sentence and the Bash command it
+                             becomes, side by side, updating as you type
+     the words that work     read straight out of the matcher's own dictionary
+
+   THE TRANSLATION IS THE POINT. This is a Linux course: showing that
+   "create a file called notes" becomes
+
+       linux/workspace.sh create notes
+
+   is the whole lesson. The English is the interface; the argv is the subject.
+
+   IT IS ALSO NOT A WAY ROUND ANYTHING. Each card is a plain HTML form posting
+   to the same /console route the text box uses, with the same
+   console_param_<name> convention the confirm step has used since Phase 6. A
+   value typed into a labelled box and a value pulled out of a sentence by a
+   regular expression arrive at the same validator, and test_guide.py section 7
+   re-runs every Phase 6 hostile input through this path to prove it.
+   =========================================================================== #}
+<div class="section-title">
+  <span>Build a command</span>
+  <span class="muted" style="font-size:var(--t-sm)">
+    {{ actions | length }} actions — everything Guardian is allowed to do</span>
+</div>
+
+<div class="note">
+  <strong>Nothing here can surprise you.</strong> Actions marked
+  <span class="tag read">read</span> answer a question and change nothing.
+  Actions marked <span class="tag write">write</span> always show you a preview
+  first and need a second, deliberate confirmation before anything happens.
+</div>
+
+{% for group in catalogue %}
+<h3 style="font-size:var(--t-xs);text-transform:uppercase;letter-spacing:.9px;
+           color:var(--dim);margin:var(--s3) 0 var(--s1)">{{ group.label }}</h3>
+<div class="build">
+  {% for a in group.actions %}
+  <details data-action="{{ a.id }}">
+    <summary>
+      <strong>{{ a.description }}</strong>
+      <span class="tag {{ a.danger }}">{{ a.danger }}</span>
+      <span class="what">{{ a.when }}</span>
+    </summary>
+
+    <div class="body">
+      {# The form posts an action id and named parameters. It never posts a
+         command, a path or a script name -- exactly like every other request
+         in this project since Phase 5. #}
+      <form method="post" action="{{ url_for('console_run') }}">
+        <input type="hidden" name="action_id" value="{{ a.id }}">
+
+        {% for p in a.params %}
+        <div class="field">
+          <label for="{{ a.id }}-{{ p.name }}">
+            {{ p.name }}
+            {% if p.required %}<span class="req">required</span>
+            {% else %}<span class="muted" style="font-weight:400">optional</span>{% endif %}
+          </label>
+
+          {% if p.choices %}
+          {# An enum renders as a dropdown built from guardian.conf at request
+             time. A user cannot type a service that is not on the list, and the
+             validator still checks the value again in case they forge the POST
+             -- the dropdown is a convenience, the allow-list is the rule. #}
+          <select id="{{ a.id }}-{{ p.name }}" name="console_param_{{ p.name }}"
+                  data-param="{{ p.name }}">
+            <option value="">choose…</option>
+            {% for choice in p.choices %}
+            <option value="{{ choice }}">{{ choice }}</option>
+            {% endfor %}
+          </select>
+          <div class="rule">
+            From <span class="mono">{{ p.choices_from }}</span> in
+            <span class="mono">config/guardian.conf</span>. Editing that file is
+            the only way to change this list.
+          </div>
+          {% else %}
+          <input type="text" id="{{ a.id }}-{{ p.name }}"
+                 name="console_param_{{ p.name }}" data-param="{{ p.name }}"
+                 autocomplete="off" placeholder="{{ p.placeholder }}">
+          <div class="rule">{{ p.hint }}</div>
+          {% endif %}
+
+          {% if not p.passed_to_script %}
+          <div class="rule">
+            This value is never passed to a command — Guardian uses it to pick
+            part of the answer, so it cannot be an injection at all.
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+
+        {# ------------------------------------------------------------------
+           THE TRANSLATION PANEL.
+           Rendered server-side with <slots> where values will go, then updated
+           live by JavaScript as the fields are filled. With scripting off it
+           stays on the static version, which still answers the question the
+           feature exists for.
+           ------------------------------------------------------------------ #}
+        <div class="translate" data-translate>
+          <div class="row">
+            <span class="who">You type</span>
+            <span class="said" data-role="sentence">{{ a.blank }}</span>
+          </div>
+          <div class="row">
+            <span class="who">Linux runs</span>
+            <span class="ran" data-role="command">{{ a.shape }}</span>
+          </div>
+        </div>
+
+        <div class="actions" style="margin-top:var(--s2)">
+          <button type="submit">
+            {% if a.danger == 'write' %}Preview…{% else %}Run{% endif %}
+          </button>
+          <span class="muted" style="font-size:var(--t-sm)">
+            {% if a.danger == 'write' %}
+              Shows what would happen. Nothing runs until you confirm.
+            {% else %}
+              Answers immediately. Nothing on the machine changes.
+            {% endif %}
+          </span>
+        </div>
+      </form>
+
+      <p class="when" style="margin:0">
+        Or just type it:
+        <button type="button" class="chip" data-fill="{{ a.example }}"
+                style="cursor:pointer">{{ a.example }}</button>
+      </p>
+
+      <details>
+        <summary>Words that trigger this ({{ a.phrases | length }})</summary>
+        <div class="phrases" style="margin-top:var(--s1)">
+          {% for phrase in a.phrases %}<span>{{ phrase }}</span>{% endfor %}
+        </div>
+        <p class="rule" style="margin:var(--s1) 0 0">
+          Read straight out of the matcher&rsquo;s own dictionary
+          (<span class="mono">guardian_nlp.TRIGGERS</span>), so a phrase shown
+          here is by construction a phrase that works. Every word of a phrase
+          must appear in your sentence; longer phrases score higher because
+          they are better evidence.
+        </p>
+      </details>
+
+      <p class="rule" style="margin:0">
+        Registry entry <span class="mono">{{ a.id }}</span>
+        {%- if a.script %} runs <span class="mono">linux/{{ a.script }}</span>
+          {%- if a.select %}, and reads the <span class="mono">{{ a.select }}</span>
+          part of its answer{% endif %}
+        {%- else %} is served inside Python by
+          <span class="mono">{{ a.native }}</span>{% endif %}.
+      </p>
+    </div>
+  </details>
+  {% endfor %}
+</div>
+{% endfor %}
+
+<p class="muted" style="margin-top:var(--s3);font-size:var(--t-sm)">
+  This list is <span class="mono">linux/actions.json</span>. Anything not on it
+  cannot be run, whichever words are typed above and whichever request is
+  forged — the registry is the boundary, not this page.
+</p>
+
+{% endblock %}
+
+
+{% block script %}
+{# ---------------------------------------------------------------------------
+   JAVASCRIPT ON THIS PAGE IS ENTIRELY OPTIONAL.
+
+   Everything the console does -- typing a sentence, picking from the "did you
+   mean" list, filling a builder form, confirming a write -- is plain HTML
+   forms. With scripting disabled the page loses three conveniences and keeps
+   every capability:
+
+     1. Esc cancels a pending confirmation.
+     2. Clicking an example fills the box instead of submitting it.
+     3. The translation updates as you type instead of when you submit.
+
+   None of them can execute anything. The endpoint they call,
+   /api/console/translate, runs the matcher and the validator and stops; the
+   module behind it imports neither subprocess nor os, which is asserted
+   against its parsed syntax tree by test_guide.py rather than promised here.
+   --------------------------------------------------------------------------- #}
+<script>
+(function () {
+  "use strict";
+
+  /* ---------------------------------------------------------------------
+     1. ESC CANCELS A PENDING CONFIRMATION
+     Only attached when a preview is actually on screen, so Esc does nothing
+     surprising in any other state.
+     --------------------------------------------------------------------- */
+  {% if result and result.state == 'preview' %}
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      window.location.href = "{{ url_for('console') }}";
+    }
+  });
+  {% endif %}
+
+  const ask = document.getElementById("ask");
+
+  /* ---------------------------------------------------------------------
+     2. CLICKING AN EXAMPLE FILLS THE BOX
+
+     Without scripting these are submit buttons inside real forms and they run
+     the phrase directly. With scripting they put the sentence in the box
+     instead, because being able to EDIT the example before running it is what
+     turns it from a shortcut into a lesson.
+
+     preventDefault() is what stops the form submitting, and it only ever runs
+     when this handler is attached -- so the no-JavaScript path is not a
+     fallback that has to be maintained separately, it is the same markup.
+     --------------------------------------------------------------------- */
+  document.querySelectorAll("[data-fill]").forEach(function (button) {
+    button.addEventListener("click", function (event) {
+      event.preventDefault();
+      if (!ask) { return; }
+      ask.value = button.getAttribute("data-fill");
+      ask.focus();
+      readAsk();
+    });
+  });
+
+  /* ---------------------------------------------------------------------
+     3. THE LIVE TRANSLATION
+
+     One debounced fetch per pause in typing. The delay is not decoration: a
+     request per keystroke would ask the server to run the matcher thirty times
+     for one sentence, and the answer to every one but the last is discarded.
+     --------------------------------------------------------------------- */
+  const DEBOUNCE_MS = 250;
+
+  function debounce(fn) {
+    let timer = null;
+    return function () {
+      const args = arguments;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(function () { fn.apply(null, args); }, DEBOUNCE_MS);
+    };
+  }
+
+  /* Text goes in with textContent, never innerHTML. The values come from this
+     machine's own registry rather than from anywhere hostile, but a page that
+     writes a server string into innerHTML is one edit away from being an
+     injection, and textContent costs nothing. */
+  function say(node, text) { if (node) { node.textContent = text; } }
+
+  const reading = document.getElementById("reading");
+
+  function renderReading(data) {
+    if (!reading) { return; }
+    reading.innerHTML = "";
+    if (!data || data.state === "empty") { return; }
+
+    function chunk(className, text) {
+      const span = document.createElement("span");
+      if (className) { span.className = className; }
+      span.textContent = text;
+      reading.appendChild(span);
+    }
+
+    if (data.state === "no_match") {
+      chunk("", "Not understood yet — open “Build a command” below to see everything Guardian can do.");
+      return;
+    }
+    if (data.state === "ambiguous") {
+      const names = (data.candidates || []).map(function (c) { return c.action_id; });
+      chunk("", "Ambiguous — Guardian would ask which you meant: " + names.join(", "));
+      return;
+    }
+
+    chunk("", "Understood as");
+    chunk("arrow", "→");
+    const id = document.createElement("code");
+    id.textContent = data.action_id;
+    reading.appendChild(id);
+    chunk("", "(" + data.confidence + ", " + (data.danger === "read"
+      ? "answers immediately" : "shows a preview first") + ")");
+    if (data.command) {
+      chunk("arrow", "→ runs");
+      const cmd = document.createElement("code");
+      cmd.textContent = data.command;
+      reading.appendChild(cmd);
+    }
+  }
+
+  function readAsk() {
+    if (!ask || !reading) { return; }
+    const text = ask.value.trim();
+    if (!text) { reading.innerHTML = ""; return; }
+
+    fetch("{{ url_for('api_console_translate') }}?q=" + encodeURIComponent(text))
+      .then(function (response) { return response.json(); })
+      /* A failed fetch leaves the previous line alone rather than replacing it
+         with an error. The same rule the dashboard's refresh follows: a
+         network problem must never overwrite something true with nothing. */
+      .then(renderReading)
+      .catch(function () { });
+  }
+
+  if (ask) { ask.addEventListener("input", debounce(readAsk)); }
+
+  /* ---------------------------------------------------------------------
+     4. THE BUILDER FORMS
+
+     Every keystroke in a builder form re-asks the server what the sentence and
+     the command would be. The server answers from the registry -- the same
+     build_command() the confirm route uses -- so the preview cannot describe
+     one command while a different one runs.
+     --------------------------------------------------------------------- */
+  document.querySelectorAll(".build details[data-action]").forEach(function (card) {
+    const actionId = card.getAttribute("data-action");
+    const panel = card.querySelector("[data-translate]");
+    if (!panel) { return; }
+
+    const sentenceNode = panel.querySelector('[data-role="sentence"]');
+    const commandNode = panel.querySelector('[data-role="command"]');
+    const fields = card.querySelectorAll("[data-param]");
+    if (!fields.length) { return; }          /* nothing to fill in, nothing to update */
+
+    const update = debounce(function () {
+      let query = "action_id=" + encodeURIComponent(actionId);
+      fields.forEach(function (field) {
+        if (field.value) {
+          query += "&console_param_" + encodeURIComponent(field.getAttribute("data-param"))
+                 + "=" + encodeURIComponent(field.value);
+        }
+      });
+
+      fetch("{{ url_for('api_console_translate') }}?" + query)
+        .then(function (response) { return response.json(); })
+        .then(function (data) {
+          say(sentenceNode, data.sentence);
+          /* While the form is incomplete, translate() returns the command
+             SHAPE rather than a command -- "linux/schedule.sh create <name>
+             <day> <time>" with the slots still visible. That is deliberate and
+             this line relies on it: a half-built command line would be a
+             plausible-looking thing that has never been validated. */
+          say(commandNode, data.command);
+        })
+        .catch(function () { });
+    });
+
+    fields.forEach(function (field) {
+      field.addEventListener("input", update);
+      field.addEventListener("change", update);
+    });
+  });
+}());
+</script>
+{% endblock %}

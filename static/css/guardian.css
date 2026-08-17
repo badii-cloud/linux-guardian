@@ -1,0 +1,629 @@
+/* ===========================================================================
+   Linux Guardian -- static/css/guardian.css
+
+   ONE STYLESHEET, SERVED BY FLASK FROM static/, AND NOTHING FROM THE INTERNET.
+
+   Until Phase 8 this lived inline in base.html, because the rule that matters
+   is "no CDN": a Bootstrap or Google Fonts link would leave the page unstyled
+   during an offline demonstration. A file under static/ is still entirely
+   local -- Flask serves it from disk -- so the rule holds, and the stylesheet
+   is now big enough that having it in its own file is worth the one extra
+   request. The browser caches it; the inline version was re-sent on every page.
+   =========================================================================== */
+
+:root {
+  /* -------------------------------------------------------------------------
+     COLOUR DISCIPLINE -- the one rule this stylesheet is built around.
+
+       --pass (green)   --warn (amber)   --fail (red)
+
+     These three mean HEALTH STATUS and nothing else. They appear only on a
+     verdict: a badge, a metric over a threshold, a service that is down, an
+     incident's severity. No button, border, heading or link may use them,
+     however well it would look, because the moment amber also means "this is a
+     button" nobody can tell at a glance whether the machine is in trouble.
+
+     Interactive things use --accent (blue), which never indicates health. That
+     is why the Approve button on an incident is blue and not green: it is a
+     control, not a verdict.
+     ------------------------------------------------------------------------- */
+  --bg:#0f1419; --panel:#171d26; --panel2:#1e2632; --panel3:#232c3a;
+  --line:#2a3441; --line2:#39465a;
+  --text:#e3e8ef; --muted:#8b98a9; --dim:#66748a;
+  --pass:#3fb950; --warn:#d29922; --fail:#f85149; --accent:#58a6ff;
+  --purple:#a371f7;   /* SECURITY category only -- a category, never a health verdict */
+
+  --pass-bg:rgba(63,185,80,.14);
+  --warn-bg:rgba(210,153,34,.14);
+  --fail-bg:rgba(248,81,73,.14);
+  --accent-bg:rgba(88,166,255,.14);
+  --purple-bg:rgba(163,113,247,.14);
+
+  /* SPACING SCALE -- 8/16/24/32 and nothing else. */
+  --s1:8px; --s2:16px; --s3:24px; --s4:32px;
+
+  /* TYPE SCALE -- six steps, used everywhere. */
+  --t-xs:0.75rem; --t-sm:0.8125rem; --t-md:0.9375rem;
+  --t-lg:1.125rem; --t-xl:1.5rem; --t-2xl:2rem;
+
+  --radius:10px; --radius-sm:6px;
+  --mono:ui-monospace,"DejaVu Sans Mono",monospace;
+  --sidebar:236px;
+}
+
+* { box-sizing:border-box; }
+
+body {
+  margin:0; background:var(--bg); color:var(--text);
+  font:var(--t-md)/1.55 ui-sans-serif, system-ui, "DejaVu Sans", sans-serif;
+}
+
+/* ===========================================================================
+   THE SHELL -- sidebar left, content right.
+
+   CSS GRID WITH TWO NAMED COLUMNS, not a float and not a fixed-position bar
+   with a margin on the content. Grid means the content column is genuinely the
+   remaining width, so a wide table inside it knows how much room it has; with
+   position:fixed the content would be full-width underneath the sidebar and
+   every child would have to be told about the offset.
+   =========================================================================== */
+.shell { display:grid; grid-template-columns:var(--sidebar) 1fr; min-height:100vh; }
+
+.side {
+  background:var(--panel); border-right:1px solid var(--line);
+  padding:var(--s3) 0; display:flex; flex-direction:column; gap:var(--s3);
+  position:sticky; top:0; height:100vh; overflow-y:auto;
+}
+.brand { padding:0 var(--s3); }
+.brand a { color:var(--text); text-decoration:none; display:block; }
+.brand .name { font-size:var(--t-lg); font-weight:600; letter-spacing:.3px; }
+.brand .name span { color:var(--accent); }
+.brand .tag { font-size:var(--t-xs); color:var(--dim); letter-spacing:.4px; margin-top:2px; }
+
+.side nav { display:flex; flex-direction:column; gap:2px; }
+.side .group {
+  font-size:var(--t-xs); text-transform:uppercase; letter-spacing:.9px;
+  color:var(--dim); padding:var(--s2) var(--s3) var(--s1); font-weight:600;
+}
+.side nav a {
+  display:flex; align-items:center; gap:10px;
+  color:var(--muted); text-decoration:none;
+  padding:9px var(--s3); font-size:var(--t-md);
+  border-left:2px solid transparent;
+}
+.side nav a:hover { color:var(--text); background:var(--panel2); }
+/* "You are here" is a left bar plus a fill -- an --accent cue, never a status
+   colour, because which page you are on is not a health verdict. */
+.side nav a.on { color:var(--text); background:var(--panel2); border-left-color:var(--accent); }
+.side nav a .ico { width:16px; text-align:center; opacity:.85; flex:none; }
+.side nav a .count {
+  margin-left:auto; font-size:var(--t-xs); font-weight:700;
+  background:var(--panel3); color:var(--muted);
+  border-radius:999px; padding:1px 8px; min-width:22px; text-align:center;
+}
+/* The one place a status colour appears in the nav, and it is a verdict: how
+   many incidents are open right now. */
+.side nav a .count.alert { background:var(--fail-bg); color:var(--fail); }
+
+.side .foot { margin-top:auto; padding:0 var(--s3); font-size:var(--t-xs); color:var(--dim); }
+.side .foot code { font-family:var(--mono); }
+
+.content { min-width:0; }   /* min-width:0 lets grid children shrink; without it
+                               a wide table forces the whole column wider. */
+
+.topbar {
+  display:flex; align-items:center; justify-content:space-between; gap:var(--s2);
+  padding:var(--s2) var(--s3); border-bottom:1px solid var(--line);
+  background:var(--panel); position:sticky; top:0; z-index:5;
+}
+.topbar h1 { margin:0; font-size:var(--t-lg); font-weight:600; }
+.topbar .right { display:flex; align-items:center; gap:var(--s2); }
+
+main { padding:var(--s3); max-width:1500px; }
+
+/* ===========================================================================
+   CARDS AND GRIDS
+   =========================================================================== */
+.grid { display:grid; gap:var(--s2); grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); }
+.grid.two { grid-template-columns:repeat(auto-fit,minmax(380px,1fr)); }
+.grid.wide { grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); }
+
+.card {
+  background:var(--panel); border:1px solid var(--line);
+  border-radius:var(--radius); padding:var(--s2); min-width:0;
+}
+.card h2 {
+  margin:0 0 var(--s1); font-size:var(--t-xs); text-transform:uppercase;
+  letter-spacing:.9px; color:var(--muted); font-weight:600;
+}
+.card h2 .right { float:right; text-transform:none; letter-spacing:0; }
+.big { font-size:var(--t-2xl); font-weight:600; line-height:1.1; font-variant-numeric:tabular-nums; }
+.mid { font-size:var(--t-xl); font-weight:600; font-variant-numeric:tabular-nums; }
+.sub { color:var(--muted); font-size:var(--t-sm); margin-top:var(--s1); }
+.section-title {
+  margin:var(--s4) 0 var(--s2); font-size:var(--t-lg); font-weight:600;
+  display:flex; align-items:center; justify-content:space-between; gap:var(--s2);
+}
+.section-title:first-child { margin-top:0; }
+
+.bar { height:6px; background:var(--panel2); border-radius:3px; margin-top:var(--s1); overflow:hidden; }
+.bar i { display:block; height:100%; border-radius:3px; transition:width .4s ease; }
+
+/* An operational summary, not a health badge: use the neutral product accent
+   so PASS/WARNING/FAIL colours retain their single, diagnostic meaning. */
+.briefing {
+  display:grid; grid-template-columns:auto 1fr auto; align-items:center;
+  gap:var(--s2); margin-top:var(--s2); padding:var(--s2);
+  border:1px solid var(--line2); border-radius:var(--radius); background:var(--panel2);
+}
+.briefing-mark {
+  color:var(--accent); background:var(--accent-bg); border:1px solid var(--accent);
+  border-radius:var(--radius-sm); padding:var(--s1); font:700 var(--t-xs)/1 var(--mono);
+  letter-spacing:.8px;
+}
+.briefing-label { color:var(--dim); font-size:var(--t-xs); font-weight:700; letter-spacing:.9px; text-transform:uppercase; }
+.briefing-title { margin-top:2px; font-size:var(--t-lg); font-weight:600; }
+.briefing-link { white-space:nowrap; }
+
+/* PROCESS EXPLORER -- bars make relative CPU use visible without adding a
+   dangerous "kill" button to a monitoring tool. */
+.process-toolbar { display:flex; justify-content:space-between; align-items:end; gap:var(--s2); margin-bottom:var(--s2); }
+.process-search { color:var(--muted); font-size:var(--t-xs); font-weight:700; text-transform:uppercase; letter-spacing:.7px; white-space:nowrap; }
+.process-search input { display:block; margin-top:4px; width:190px; }
+.sort-button { all:unset; cursor:pointer; color:inherit; }
+.sort-button::after { content:" ↕"; color:var(--dim); }
+.sort-button:hover, .sort-button:focus-visible { color:var(--accent); }
+.process-name { max-width:360px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.process-meter { height:4px; width:100%; min-width:100px; margin-top:4px; background:var(--panel3); border-radius:4px; overflow:hidden; }
+.process-meter i { display:block; height:100%; background:var(--accent); border-radius:4px; }
+.process-value.attention { color:var(--warn); }
+.process-value.attention .process-meter i { background:var(--warn); }
+.process-value.critical { color:var(--fail); }
+.process-value.critical .process-meter i { background:var(--fail); }
+
+/* ===========================================================================
+   BADGES -- the only place status colour is allowed
+   =========================================================================== */
+.badge {
+  display:inline-block; padding:2px 10px; border-radius:999px;
+  font-size:var(--t-xs); font-weight:700; letter-spacing:.6px; white-space:nowrap;
+}
+.PASS, .NORMAL, .LOW, .RESOLVED   { background:var(--pass-bg); color:var(--pass); }
+.WARNING, .MEDIUM                 { background:var(--warn-bg); color:var(--warn); }
+/* FAILED belongs with the red group and was missing, so a failed remediation
+   rendered as an unstyled pill -- the one status where the page most needed to
+   shout. It IS a verdict (the repair did not work and the incident is still
+   open), so it takes a status colour, unlike the lifecycle states below. */
+.FAIL, .CRITICAL, .HIGH, .FAILED  { background:var(--fail-bg); color:var(--fail); }
+.INFO, .LEARNING, .IGNORED        { background:var(--panel3); color:var(--muted); }
+/* Lifecycle states are NOT health verdicts, so they are --accent, not amber.
+   An incident being investigated is not a degree of illness. */
+.DETECTED, .INVESTIGATING, .WAITING_APPROVAL, .REMEDIATING, .VERIFYING {
+  background:var(--accent-bg); color:var(--accent);
+}
+.SECURITY { background:var(--purple-bg); color:var(--purple); }
+
+.chip {
+  display:inline-block; padding:1px 8px; border-radius:var(--radius-sm);
+  background:var(--panel2); border:1px solid var(--line);
+  font-size:var(--t-xs); color:var(--muted); font-family:var(--mono);
+}
+
+/* ===========================================================================
+   TABLES
+   =========================================================================== */
+.t-scroll { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:var(--t-md); }
+th, td { text-align:left; padding:10px var(--s1); border-bottom:1px solid var(--line); }
+th { color:var(--muted); font-size:var(--t-xs); text-transform:uppercase; letter-spacing:.7px; font-weight:600; }
+td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+tr:last-child td { border-bottom:none; }
+tbody tr:hover { background:var(--panel2); }
+td a { color:var(--accent); text-decoration:none; font-family:var(--mono); }
+td a:hover { text-decoration:underline; }
+
+/* ===========================================================================
+   CONTROLS
+   =========================================================================== */
+button, .btn {
+  background:var(--accent); color:#06121f; border:0; border-radius:var(--radius-sm);
+  padding:var(--s1) 14px; font-weight:700; font-size:var(--t-sm);
+  cursor:pointer; font-family:inherit; text-decoration:none; display:inline-block;
+}
+button:hover, .btn:hover { filter:brightness(1.12); }
+button[disabled] { background:var(--panel2); color:var(--muted); cursor:not-allowed; filter:none; }
+/* A quieter control for anything that is not the main thing to press. Grey, not
+   red, even for Reject -- refusing a proposal is not a system failure. */
+button.ghost, .btn.ghost {
+  background:var(--panel2); color:var(--text); border:1px solid var(--line2);
+}
+button.ghost:hover, .btn.ghost:hover { background:var(--panel3); filter:none; }
+
+.actions { display:flex; flex-wrap:wrap; gap:var(--s1); align-items:center; }
+form.inline { display:inline; }
+
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
+  outline:2px solid var(--accent); outline-offset:2px;
+}
+
+select, input[type=text], input[type=search] {
+  background:var(--panel2); color:var(--text); border:1px solid var(--line2);
+  border-radius:var(--radius-sm); padding:7px 10px; font:inherit; font-size:var(--t-sm);
+}
+
+pre {
+  background:#0b0f14; border:1px solid var(--line); border-radius:var(--radius-sm);
+  padding:var(--s2); overflow-x:auto; font-size:var(--t-sm); margin:0;
+  font-family:var(--mono);
+}
+details { border:1px solid var(--line); border-radius:var(--radius-sm); padding:var(--s1) var(--s2); }
+details summary { cursor:pointer; color:var(--accent); font-size:var(--t-sm); }
+details[open] summary { margin-bottom:var(--s2); }
+.err {
+  background:var(--fail-bg); border:1px solid var(--fail); color:#ffb4ae;
+  border-radius:var(--radius-sm); padding:12px var(--s2); margin-bottom:var(--s2);
+}
+.note {
+  background:var(--accent-bg); border:1px solid var(--accent); color:#bcdcff;
+  border-radius:var(--radius-sm); padding:12px var(--s2); margin-bottom:var(--s2);
+  font-size:var(--t-sm);
+}
+.mono { font-family:var(--mono); }
+.muted { color:var(--muted); }
+.dim { color:var(--dim); }
+.right { text-align:right; }
+.nowrap { white-space:nowrap; }
+
+/* ===========================================================================
+   CHARTS -- drawn as inline SVG by static/js/charts.js
+   =========================================================================== */
+.chart { width:100%; height:150px; display:block; }
+.chart .grid-line { stroke:var(--line); stroke-width:1; }
+.chart .axis-label { fill:var(--dim); font-size:10px; font-family:var(--mono); }
+.chart .line { fill:none; stroke:var(--accent); stroke-width:2;
+               stroke-linejoin:round; stroke-linecap:round; }
+.chart .area { fill:var(--accent); opacity:.10; }
+.chart .dot  { fill:var(--accent); }
+.chart .band { fill:var(--muted); opacity:.09; }     /* the baseline +/- 1 sigma */
+.chart .mean { stroke:var(--muted); stroke-width:1; stroke-dasharray:4 4; }
+.chart-empty {
+  height:150px; display:flex; align-items:center; justify-content:center;
+  color:var(--dim); font-size:var(--t-sm); text-align:center; padding:var(--s2);
+}
+.spark { width:100%; height:34px; display:block; margin-top:var(--s1); }
+.spark .line { fill:none; stroke:var(--accent); stroke-width:1.5; }
+.spark .area { fill:var(--accent); opacity:.12; }
+
+/* ===========================================================================
+   TIMELINE  (brief section 27)
+   =========================================================================== */
+.timeline { list-style:none; margin:0; padding:0 0 0 var(--s3); position:relative; }
+.timeline::before {
+  content:""; position:absolute; left:7px; top:6px; bottom:6px;
+  width:2px; background:var(--line);
+}
+.timeline li { position:relative; padding:0 0 var(--s2) var(--s1); }
+.timeline li::before {
+  content:""; position:absolute; left:-21px; top:6px;
+  width:10px; height:10px; border-radius:50%;
+  background:var(--panel); border:2px solid var(--line2);
+}
+.timeline li.is-status::before { border-color:var(--accent); }
+.timeline li.is-action::before { border-color:var(--accent); background:var(--accent); }
+.timeline li.is-verify::before { border-color:var(--pass); }
+.timeline .when { font-family:var(--mono); font-size:var(--t-xs); color:var(--dim); }
+.timeline .what { margin-top:2px; }
+
+/* ===========================================================================
+   THE THREE-COLUMN ANALYSIS  (brief sections 14 and 39)
+   FACT / INFERENCE / RECOMMENDATION are visually separated because they are
+   different KINDS of statement, and a reader must always be able to see which
+   parts were measured and which were reasoned.
+   =========================================================================== */
+.analysis { display:grid; gap:var(--s2); grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); }
+.analysis .col { background:var(--panel2); border-radius:var(--radius-sm); padding:var(--s2); }
+.analysis .col h3 {
+  margin:0 0 var(--s1); font-size:var(--t-xs); letter-spacing:.9px;
+  text-transform:uppercase; font-weight:700;
+}
+.analysis .fact h3 { color:var(--text); }
+.analysis .inference h3 { color:var(--accent); }
+.analysis .recommendation h3 { color:var(--muted); }
+.analysis ul { margin:0; padding-left:var(--s2); }
+.analysis li { margin-bottom:6px; font-size:var(--t-sm); }
+.analysis li:last-child { margin-bottom:0; }
+
+/* Before / after  (brief section 28) */
+.beforeafter { display:grid; grid-template-columns:1fr auto 1fr; gap:var(--s2); align-items:center; }
+.beforeafter .arrow { color:var(--dim); font-size:var(--t-xl); }
+
+/* ===========================================================================
+   FRESHNESS CLOCK
+   Deliberately NOT green: it reports how old the numbers are, which is not a
+   health verdict. A stale dashboard is not an unhealthy machine.
+   =========================================================================== */
+.clock { display:flex; align-items:center; gap:var(--s1); font-size:var(--t-sm); color:var(--muted); }
+.clock .dot { width:7px; height:7px; border-radius:50%; background:var(--muted); transition:background .2s ease; }
+.clock.live .dot { background:var(--accent); }
+
+@keyframes settle { from { opacity:.45; } to { opacity:1; } }
+.changed { animation:settle .5s ease-out; }
+
+/* ===========================================================================
+   PHASE 9 -- THE PLAIN-ENGLISH LAYER
+
+   Everything below exists because Phases 7 and 8 produced a page that was
+   correct and unreadable. None of it introduces a new colour: advice and
+   navigation are --accent, verdicts keep the three status colours, and
+   anything that is merely inactive is --muted or --dim.
+   =========================================================================== */
+
+/* --- The four questions, always in the same order ------------------------
+   A two-column grid rather than headings above paragraphs, so the four
+   question labels line up in a column the eye can run down. A reader who
+   learns that "What it means" is always third stops having to search for it. */
+.story { display:grid; gap:var(--s2); margin:0; }
+.story .qa { display:grid; grid-template-columns:170px 1fr; gap:var(--s2); align-items:start; }
+.story .q {
+  color:var(--dim); font-size:var(--t-xs); font-weight:700;
+  text-transform:uppercase; letter-spacing:.9px; padding-top:4px;
+}
+.story .a { font-size:var(--t-md); }
+.story .a.lead { font-size:var(--t-lg); line-height:1.45; }
+/* The next step is the one line the page wants read, so it is the one line
+   with a border. --accent, because "press Investigate" is a control, not a
+   diagnosis. */
+.story .a.step {
+  border-left:3px solid var(--accent); padding-left:var(--s2);
+  background:var(--panel2); border-radius:0 var(--radius-sm) var(--radius-sm) 0;
+  padding-top:var(--s1); padding-bottom:var(--s1);
+}
+.story .a.step strong { color:var(--accent); }
+
+/* The urgency line. It is ADVICE, so --accent; the severity badge beside it is
+   the verdict and keeps the status colour. Putting them next to each other is
+   deliberate: "CRITICAL / for information" is a real and useful combination
+   (a serious-looking finding Guardian is not sure about). */
+.urgency { display:flex; align-items:baseline; gap:var(--s2); flex-wrap:wrap; }
+.urgency .call { font-size:var(--t-xl); font-weight:600; color:var(--accent); }
+.urgency .why { color:var(--muted); font-size:var(--t-md); }
+
+/* --- The lifecycle, drawn as a line --------------------------------------
+   Six steps with the current one marked. This is the single change that makes
+   the incident page legible: it shows that approval comes BEFORE anything runs
+   and verification comes AFTER, which is the whole safety argument of Phase 8
+   expressed as a picture instead of a paragraph. */
+.pipeline { display:flex; flex-wrap:wrap; gap:0; list-style:none; margin:0; padding:0; }
+.pipeline li {
+  flex:1 1 150px; min-width:140px; padding:var(--s2) var(--s2) var(--s1) 0;
+  border-top:3px solid var(--line); position:relative;
+}
+.pipeline .name { font-weight:600; font-size:var(--t-md); color:var(--muted); }
+/* NOT `.note`. The first version called this class `.note` and every step grew
+   a blue bordered box, because `.note` is already the site-wide callout
+   component defined above. Two unrelated things with the same class name is a
+   collision waiting for exactly this, and it was invisible in the markup --
+   only a screenshot showed it. */
+.pipeline .step-note { color:var(--dim); font-size:var(--t-xs); margin-top:2px; line-height:1.4; }
+.pipeline li.done  { border-top-color:var(--accent); }
+.pipeline li.done .name { color:var(--text); }
+.pipeline li.done .name::before { content:"\2713\00a0"; color:var(--accent); }
+.pipeline li.current { border-top-color:var(--accent); }
+.pipeline li.current .name { color:var(--accent); }
+.pipeline li.failed { border-top-color:var(--fail); }
+.pipeline li.failed .name { color:var(--fail); }
+.pipeline li.failed .name::before { content:"\00d7\00a0"; }
+
+/* ===========================================================================
+   MANUAL STEPS -- the commands a human runs when Guardian may not.
+
+   COLOUR DISCIPLINE. --pass / --warn / --fail mean a health VERDICT and
+   nothing else, so none of them appears here: a suggested command is not a
+   verdict on the machine. The steps are told apart by their left border --
+   --accent for the two safe kinds, --line for the destructive one, which is
+   deliberately the QUIETEST of the three. A red border on `kill` would read as
+   "this is the important one" when the intended reading is "this is the one to
+   reach for last". The caution text carries the warning in words, where it
+   cannot be mistaken for a status.
+   =========================================================================== */
+.manual { list-style:none; margin:0; padding:0; counter-reset:step; }
+.manual-step {
+  border-left:3px solid var(--line); padding:0 0 0 var(--s2);
+  margin-bottom:var(--s3); position:relative;
+}
+.manual-step:last-child { margin-bottom:0; }
+.manual-step.look,
+.manual-step.soften { border-left-color:var(--accent); }
+.manual-cmd {
+  display:block; background:var(--panel2); border-radius:var(--radius-sm);
+  padding:10px var(--s2); font-size:var(--t-sm); color:var(--text);
+  /* A long command must scroll inside its own box rather than widening the
+     page: `ps -p 1234 -o pid,ppid,user,%cpu,%mem,etime,comm` is wider than a
+     narrow window and would otherwise put a horizontal scrollbar on the body. */
+  overflow-x:auto; white-space:pre;
+}
+.manual-why { color:var(--muted); font-size:var(--t-sm); margin:var(--s1) 0 0; }
+/* The caution is brighter than the explanation above it and carries a word,
+   not a colour. Amber would have been the obvious choice and is exactly the
+   wrong one: --warn means "this machine has a WARNING", and a reader who has
+   learned that would misread a note about SIGTERM as a verdict on their
+   system. The label does the work instead, which also survives being read
+   aloud, printed in the report, or seen by somebody who cannot distinguish
+   the two colours. */
+.manual-caution { color:var(--text); font-size:var(--t-sm); margin:6px 0 0; }
+.manual-caution::before { content:"Caution \2014 "; font-weight:700; }
+/* A skipped stage is faded, not ticked. An incident that recovered on its own
+   never went through approval, and a tick there would put a repair in the
+   record that never happened. */
+.pipeline li.skipped { opacity:.5; }
+.pipeline li.skipped .name::before { content:"\2013\00a0"; color:var(--dim); }
+.pipeline .here {
+  display:inline-block; margin-top:var(--s1); padding:1px 8px; border-radius:999px;
+  background:var(--accent-bg); color:var(--accent);
+  font-size:var(--t-xs); font-weight:700; letter-spacing:.6px;
+}
+
+/* --- Symptoms, said in English before they are drawn --------------------- */
+.symptom { border-top:1px solid var(--line); padding-top:var(--s2); margin-top:var(--s2); }
+.symptom:first-child { border-top:0; padding-top:0; margin-top:0; }
+.symptom .head { display:flex; align-items:baseline; justify-content:space-between; gap:var(--s2); }
+.symptom .label { font-weight:600; }
+.symptom .said { margin:var(--s1) 0; font-size:var(--t-md); }
+.symptom .means { color:var(--dim); font-size:var(--t-sm); }
+.symptom .id { font-family:var(--mono); font-size:var(--t-xs); color:var(--dim); }
+
+/* --- The glossary --------------------------------------------------------
+   Behind a <details> on the incident pages, so a jargon word is one click from
+   where it appears rather than in documentation nobody opens. */
+.glossary { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+            gap:var(--s2); margin:0; }
+.glossary div { min-width:0; }
+.glossary dt { font-weight:600; color:var(--text); }
+.glossary dd { margin:4px 0 0; color:var(--muted); font-size:var(--t-sm); }
+
+/* ===========================================================================
+   PHASE 9 -- THE GUIDED COMMAND BUILDER
+   =========================================================================== */
+
+/* Starter phrases. Each is a real form that posts the sentence, so they work
+   with scripting disabled; the JavaScript only upgrades them to "fill the box
+   so you can edit it first". */
+.starters { display:flex; flex-wrap:wrap; gap:var(--s1); margin-bottom:var(--s3); }
+.starters form { margin:0; }
+.starters button {
+  background:var(--panel2); color:var(--text); border:1px solid var(--line2);
+  font-weight:400; font-family:var(--mono); font-size:var(--t-sm);
+}
+.starters button:hover { border-color:var(--accent); color:var(--accent); filter:none; }
+
+/* The live "as you type" line under the ask box. Reserved height so the page
+   does not jump when it appears. */
+.reading { min-height:22px; margin:calc(-1 * var(--s2)) 0 var(--s3); font-size:var(--t-sm);
+           color:var(--muted); display:flex; gap:var(--s1); align-items:baseline; flex-wrap:wrap; }
+.reading .arrow { color:var(--dim); }
+.reading code { font-family:var(--mono); color:var(--accent); }
+
+/* One card per action.
+   auto-FILL, not auto-fit. auto-fit collapses the empty tracks, so a group
+   with one action in it produced a single card stretched across the whole
+   width while the group above it showed three normal ones -- the same
+   component at two sizes on one page. auto-fill keeps the track structure, so
+   a lone card is the same width as any other card. */
+.build {
+  display:grid; gap:var(--s2); grid-template-columns:repeat(auto-fill,minmax(330px,1fr));
+  /* align-items:start, because a grid row stretches its items to match the
+     tallest by default -- so opening one card grew its two neighbours into
+     tall, nearly empty boxes. Each card should be as tall as its own content
+     and no taller. */
+  align-items:start;
+}
+.build > details {
+  border:1px solid var(--line); border-radius:var(--radius); background:var(--panel);
+  padding:0; overflow:hidden;
+}
+.build > details > summary {
+  padding:var(--s2); color:var(--text); font-size:var(--t-md); list-style:none;
+  display:flex; align-items:baseline; gap:var(--s1); flex-wrap:wrap;
+}
+.build > details > summary::-webkit-details-marker { display:none; }
+.build > details > summary::before { content:"\25b8"; color:var(--dim); flex:none; }
+.build > details[open] > summary::before { content:"\25be"; }
+/* THE FLEX RULES BELOW ARE NOT COSMETIC. Without them a long title wrapped to
+   its own line and left the little triangle stranded alone above it -- so
+   exactly the cards whose title ran past one line looked different from the
+   rest, for no reason a reader could see.
+     flex-basis:0  is the load-bearing part. With `auto` the title's base size
+                   is its full max-content width, and a wrapping flex container
+                   moves an item to the next line BEFORE it will shrink it. At
+                   0 the title starts with no width, so it always fits beside
+                   the marker and then grows into the space that is left,
+                   wrapping its text inside its own box.
+     min-width:0   flex items default to min-width:auto (= min-content), which
+                   would put the floor back and undo the line above.
+     flex:none     keeps the marker and the read/write tag at their natural
+                   size instead of competing for the same space. */
+.build > details > summary strong { flex:1 1 0; min-width:0; }
+.build > details > summary .tag { flex:none; }
+.build > details[open] > summary { border-bottom:1px solid var(--line); margin-bottom:0; background:var(--panel2); }
+.build > details:hover { border-color:var(--line2); }
+.build .what { color:var(--muted); font-size:var(--t-sm); flex:1 1 100%; }
+.build .body { padding:var(--s2); display:grid; gap:var(--s2); }
+.build .when { color:var(--muted); font-size:var(--t-sm); margin:0; }
+
+/* A parameter field with its rule underneath. The rule is shown BEFORE the
+   user types, which is the cheaper moment for everybody -- the validator says
+   the same thing afterwards, but by then somebody has already been refused. */
+.field { display:grid; gap:4px; }
+.field label { font-size:var(--t-xs); font-weight:700; letter-spacing:.7px;
+               text-transform:uppercase; color:var(--muted); }
+.field label .req { color:var(--accent); }
+.field input, .field select { width:100%; }
+.field .rule { color:var(--dim); font-size:var(--t-xs); line-height:1.45; }
+
+/* THE TRANSLATION PANEL -- the point of the whole feature.
+   English on top, the argv underneath, in that order, because the English is
+   the interface and the command is the lesson. */
+.translate { border:1px solid var(--line2); border-radius:var(--radius-sm);
+             background:var(--panel2); overflow:hidden; }
+.translate .row { display:grid; grid-template-columns:96px 1fr; gap:var(--s2);
+                  padding:var(--s1) var(--s2); align-items:baseline; }
+.translate .row + .row { border-top:1px solid var(--line); }
+.translate .who { color:var(--dim); font-size:var(--t-xs); font-weight:700;
+                  text-transform:uppercase; letter-spacing:.7px; }
+.translate .said { font-size:var(--t-md); }
+.translate .ran { font-family:var(--mono); font-size:var(--t-sm); color:var(--accent);
+                  overflow-wrap:anywhere; }
+.translate .slot { color:var(--dim); }
+
+/* The phrases that trigger an action, read straight out of the matcher. */
+.phrases { display:flex; flex-wrap:wrap; gap:6px; }
+.phrases span {
+  font-family:var(--mono); font-size:var(--t-xs); color:var(--muted);
+  background:var(--panel2); border:1px solid var(--line); border-radius:4px; padding:1px 6px;
+}
+
+/* ===========================================================================
+   RESPONSIVE
+   Below 980px the sidebar becomes a horizontal strip above the content: a
+   240px column on a phone leaves nothing for the content, and a hamburger menu
+   would be a pile of JavaScript for a dashboard nobody browses on a phone.
+   =========================================================================== */
+@media (max-width:980px) {
+  .shell { grid-template-columns:1fr; }
+  .side {
+    position:static; height:auto; flex-direction:row; flex-wrap:wrap;
+    align-items:center; gap:var(--s2); padding:var(--s2);
+    border-right:0; border-bottom:1px solid var(--line);
+  }
+  .side .brand { padding:0; }
+  .side nav { flex-direction:row; flex-wrap:wrap; gap:var(--s1); }
+  .side .group, .side .foot { display:none; }
+  .side nav a { padding:6px 10px; border-left:0; border-radius:var(--radius-sm); }
+  .side nav a.on { box-shadow:inset 0 -2px 0 var(--accent); }
+  main { padding:var(--s2); }
+  .grid, .grid.two, .grid.wide { grid-template-columns:1fr; }
+  .briefing { grid-template-columns:1fr; }
+  .briefing-link { justify-self:start; }
+  .process-toolbar { align-items:stretch; flex-direction:column; }
+  .process-search input { width:100%; }
+  .big { font-size:var(--t-xl); }
+  .beforeafter { grid-template-columns:1fr; }
+  .beforeafter .arrow { transform:rotate(90deg); text-align:center; }
+
+  /* Phase 9. The four-question labels stack above their answers, and the
+     lifecycle turns from a horizontal line into a vertical one -- six steps
+     side by side on a phone would give each about forty pixels. */
+  .story .qa { grid-template-columns:1fr; gap:4px; }
+  .pipeline li {
+    flex:1 1 100%; border-top:0; border-left:3px solid var(--line);
+    padding:var(--s1) 0 var(--s1) var(--s2);
+  }
+  .pipeline li.done, .pipeline li.current { border-left-color:var(--accent); }
+  .pipeline li.failed { border-left-color:var(--fail); }
+  .translate .row { grid-template-columns:1fr; gap:2px; }
+  .build { grid-template-columns:1fr; }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  * { animation:none !important; transition:none !important; }
+}

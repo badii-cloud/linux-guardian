@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Processes{% endblock %}
+{% block heading %}Process explorer{% endblock %}
+
+{% block topbar %}
+  <a class="btn ghost" href="{{ url_for('processes') }}">Refresh sample</a>
+{% endblock %}
+
+{% block body %}
+{% if process.status != 'ok' %}
+  <div class="err"><strong>Process sample failed:</strong> {{ process.message }}</div>
+{% else %}
+{% set busiest = process.processes | first %}
+{% set memory_hog = process.processes | sort(attribute='memory_mb', reverse=true) | first %}
+
+<div class="note">
+  <strong>A safe, read-only view.</strong> This page helps you find what is busy;
+  it cannot kill, pause, or alter a process. Use an incident investigation before
+  deciding what to do with a process.
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>Processes seen</h2>
+    <div class="big">{{ process.total_processes }}</div>
+    <div class="sub">top {{ process.returned_count }} shown below</div>
+  </div>
+  <div class="card">
+    <h2>Using the most CPU</h2>
+    <div class="mid mono">{{ busiest.name if busiest else '--' }}</div>
+    <div class="sub">{{ busiest.cpu_percent if busiest else '--' }}% · PID {{ busiest.pid if busiest else '--' }}</div>
+  </div>
+  <div class="card">
+    <h2>Using the most memory</h2>
+    <div class="mid mono">{{ memory_hog.name if memory_hog else '--' }}</div>
+    <div class="sub">{{ memory_hog.memory_mb if memory_hog else '--' }} MB · PID {{ memory_hog.pid if memory_hog else '--' }}</div>
+  </div>
+  <div class="card">
+    <h2>Sample quality</h2>
+    <div class="big">{{ process.sample_window_seconds }}s</div>
+    <div class="sub">measured live, not lifetime average</div>
+  </div>
+</div>
+
+<div class="section-title"><span>Current CPU consumers</span><span class="muted" style="font-size:var(--t-sm)">click a column name to sort</span></div>
+<div class="card">
+  <div class="process-toolbar">
+    <div class="sub" style="margin:0">
+      A value above 100% means a process is using more than one CPU core.
+      CPU at 70%+ is marked for attention; 90%+ is critical.
+    </div>
+    <label class="process-search">Find process
+      <input id="process-filter" type="search" placeholder="name or PID" autocomplete="off">
+    </label>
+  </div>
+  <div class="t-scroll">
+  <table id="process-table">
+    <thead><tr>
+      <th class="num"><button class="sort-button" data-sort="rank">#</button></th>
+      <th class="num"><button class="sort-button" data-sort="pid">PID</button></th>
+      <th><button class="sort-button" data-sort="name">Name</button></th>
+      <th class="num"><button class="sort-button" data-sort="cpu">CPU %</button></th>
+      <th class="num"><button class="sort-button" data-sort="memory">Memory MB</button></th>
+    </tr></thead>
+    <tbody>
+    {% for p in process.processes %}
+    {% set level = 'critical' if p.cpu_percent >= 90 else 'attention' if p.cpu_percent >= 70 else 'normal' %}
+    <tr data-rank="{{ p.rank }}" data-pid="{{ p.pid }}" data-name="{{ p.name | lower }}"
+        data-cpu="{{ p.cpu_percent }}" data-memory="{{ p.memory_mb }}">
+      <td class="num muted">{{ p.rank }}</td>
+      <td class="num mono">{{ p.pid }}</td>
+      <td class="mono process-name">{{ p.name }}</td>
+      <td class="num process-value {{ level }}">
+        <div>{{ p.cpu_percent }}</div><div class="process-meter" aria-label="{{ p.cpu_percent }} percent CPU"><i style="width:{{ [p.cpu_percent, 100] | min }}%"></i></div>
+      </td>
+      <td class="num">{{ p.memory_mb }}</td>
+    </tr>
+    {% endfor %}
+    <tr id="no-process-match" hidden><td colspan="5" class="muted">No visible process matches that search.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block script %}
+<script>
+/* Client-side filter and sort only rearrange the ten rows already rendered by
+   Flask. No process command is ever built from what the visitor types. */
+(function () {
+  "use strict";
+  var table = document.getElementById("process-table");
+  if (!table) return;
+  var body = table.tBodies[0];
+  var filter = document.getElementById("process-filter");
+  var empty = document.getElementById("no-process-match");
+  var direction = {};
+  function rows() { return Array.prototype.slice.call(body.querySelectorAll("tr[data-pid]")); }
+  function applyFilter() {
+    var query = filter.value.trim().toLowerCase();
+    var visible = 0;
+    rows().forEach(function (row) {
+      var match = !query || row.dataset.name.indexOf(query) !== -1 || row.dataset.pid.indexOf(query) !== -1;
+      row.hidden = !match;
+      if (match) visible += 1;
+    });
+    empty.hidden = visible !== 0;
+  }
+  filter.addEventListener("input", applyFilter);
+  table.querySelectorAll("[data-sort]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var key = button.dataset.sort;
+      direction[key] = direction[key] === "asc" ? "desc" : "asc";
+      var factor = direction[key] === "asc" ? 1 : -1;
+      rows().sort(function (left, right) {
+        var a = left.dataset[key], b = right.dataset[key];
+        if (key !== "name") return factor * (Number(a) - Number(b));
+        return factor * a.localeCompare(b);
+      }).forEach(function (row) { body.insertBefore(row, empty); });
+      table.querySelectorAll(".sort-button").forEach(function (item) { item.removeAttribute("aria-sort"); });
+      button.setAttribute("aria-sort", direction[key] === "asc" ? "ascending" : "descending");
+    });
+  });
+})();
+</script>
+{% endblock %}

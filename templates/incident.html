@@ -1,0 +1,484 @@
+{% extends "base.html" %}
+{% block title %}{{ incident.id }}{% endblock %}
+{% block heading %}{{ incident.id }} &mdash; {{ incident.title }}{% endblock %}
+
+{% block topbar %}
+  <span class="badge {{ incident.severity }}">{{ incident.severity }}</span>
+  <span class="badge {{ incident.status }}">{{ status_label(incident.status) }}</span>
+{% endblock %}
+
+{% block body %}
+
+{# ===========================================================================
+   IN PLAIN ENGLISH -- FIRST, BEFORE ANY NUMBER              (Phase 9)
+
+   The order on this page is an argument. Until Phase 9 it opened with four
+   cards reading CRITICAL / 74 / 98% / 9x, which is precise, complete and
+   meaningless to anybody who has not read guardian_anomaly.py. A reader has to
+   be told WHAT HAPPENED before a number about it can mean anything, so the
+   numbers now come second and each one carries the sentence that explains it.
+
+   Every sentence below comes from guardian_explain.py, which reads the
+   incident record and invents nothing: where a value is missing it says so.
+   =========================================================================== #}
+<div class="card">
+  <div class="urgency">
+    <span class="call">{{ story.urgency.title }}</span>
+    <span class="badge {{ incident.severity }}">{{ incident.severity }}</span>
+    <span class="why">{{ story.urgency.detail }}</span>
+  </div>
+
+  <dl class="story" style="margin-top:var(--s3)">
+    <div class="qa">
+      <dt class="q">What happened</dt>
+      <dd class="a lead">{{ story.happened }}</dd>
+    </div>
+    <div class="qa">
+      <dt class="q">Why Guardian says so</dt>
+      <dd class="a">{{ story.noticed }}</dd>
+    </div>
+    <div class="qa">
+      <dt class="q">What it means</dt>
+      <dd class="a">{{ story.means }}</dd>
+    </div>
+    <div class="qa">
+      <dt class="q">What to do now</dt>
+      {# The one line the page wants read, and the only one with a border.
+         `who` says whether this is waiting on the person reading it or on
+         Guardian, so nobody sits watching a page that is waiting for them. #}
+      <dd class="a step">
+        <strong>{{ story.next.label }}</strong>
+        {%- if story.next.who == 'guardian' %} <span class="muted">— Guardian is doing this; nothing is needed from you</span>
+        {%- elif story.next.who == 'nobody' %} <span class="muted">— this incident is closed</span>{% endif %}
+        <div style="margin-top:4px">{{ story.next.text }}</div>
+      </dd>
+    </div>
+  </dl>
+</div>
+
+{# ===========================================================================
+   WHERE THIS INCIDENT HAS REACHED
+
+   The state machine in guardian_incidents.py drawn as six steps. It makes the
+   safety property visible rather than documented: approval sits BEFORE the fix
+   and verification sits AFTER it, so a reader can see that nothing runs
+   without a person and nothing closes without being re-measured.
+   =========================================================================== #}
+<div class="section-title"><span>Where this has reached</span></div>
+<div class="card">
+  <ul class="pipeline">
+    {% for stage in story.pipeline %}
+    <li class="{{ stage.state }}">
+      <div class="name">{{ stage.label }}</div>
+      <div class="step-note">{{ stage.note }}</div>
+      {% if stage.state == 'current' %}<span class="here">YOU ARE HERE</span>{% endif %}
+      {% if stage.state == 'failed' %}<span class="here" style="background:var(--fail-bg);color:var(--fail)">STOPPED HERE</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+
+{# ===========================================================================
+   THE HEADLINE
+   =========================================================================== #}
+<div class="section-title"><span>The measurements behind it</span></div>
+<div class="grid">
+  {# EVERY NUMBER CARRIES THE SENTENCE THAT EXPLAINS IT. A dashboard figure
+     with no explanation beside it is a figure people learn to scroll past. #}
+  <div class="card">
+    <h2>Severity &mdash; how bad if real</h2>
+    <div class="big"><span class="badge {{ incident.severity }}">{{ incident.severity }}</span></div>
+    <div class="sub">{{ story.severity }}</div>
+  </div>
+  <div class="card">
+    <h2>Risk &mdash; how much to care now</h2>
+    <div class="big">{{ incident.risk_score }}<span class="muted" style="font-size:var(--t-md)">/100</span></div>
+    <div class="bar"><i style="width:{{ incident.risk_score }}%;background:var(--accent)"></i></div>
+    <div class="sub">{{ story.risk }}</div>
+  </div>
+  <div class="card">
+    <h2>Confidence &mdash; how sure Guardian is</h2>
+    {# A null confidence is shown as "n/a", never as 0%. The detector could not
+       compute one -- the zero-variance case -- and printing 0% would claim it
+       was certain the finding was meaningless, which is the opposite. #}
+    <div class="big">
+      {% if incident.confidence is not none %}{{ '%.0f' | format(incident.confidence * 100) }}%{% else %}n/a{% endif %}
+    </div>
+    <div class="sub">{{ story.confidence }}</div>
+  </div>
+  <div class="card">
+    <h2>Observations</h2>
+    <div class="big">{{ incident.occurrences }}&times;</div>
+    <div class="sub">
+      {# No interval is quoted here on purpose: it lives in DAEMON_INTERVAL and
+         hard-coding "30 seconds" into a template would be a second copy of a
+         setting, free to drift from the one the daemon actually uses. #}
+      How many times Guardian has re-checked and still found this abnormal
+      &mdash; one per daemon tick, for as long as the condition lasts.<br>
+      First seen {{ incident.created_human }}, most recently {{ incident.updated_human }}.
+    </div>
+  </div>
+</div>
+
+{# ===========================================================================
+   ACTIONS -- the approval flow, section 23 and 24 of the brief
+   =========================================================================== #}
+{% if incident.status in open_statuses %}
+<div class="section-title"><span>What can be done</span></div>
+
+{% if incident.status == 'WAITING_APPROVAL' %}
+  {% set preview = (incident.timeline | selectattr('status', 'equalto', 'WAITING_APPROVAL') | list | last) %}
+  <div class="card" style="border-color:var(--accent)">
+    <h2>Action request &mdash; waiting for approval</h2>
+    {% if preview and preview.detail %}
+    <table style="margin-bottom:var(--s2)">
+      <tr><th style="width:170px">Action</th><td class="mono">{{ preview.detail.action }}</td></tr>
+      <tr><th>Target</th>
+          {# ONE ROW PER PARAMETER, not the whole dict as JSON. The first
+             version printed {"service": "apache2"} at the user, which is the
+             literal shape of a Python object and not an answer to "what is
+             this going to touch". #}
+          <td>{% for key, value in (preview.detail.parameters or {}).items() %}
+                <span class="mono">{{ key }} = {{ value }}</span>{% if not loop.last %}<br>{% endif %}
+              {% else %}<span class="muted">nothing &mdash; the action takes no parameters</span>
+              {% endfor %}</td></tr>
+      <tr><th>What it will do</th>
+          {# describe_effect() returns (label, value) PAIRS. Rendering the list
+             itself put [['Will start', 'apache2.service'], ...] on the page --
+             every fact present and none of them readable. #}
+          <td>{% for label, value in preview.detail.effect or [] %}
+                <div>{{ label }}: <span class="mono">{{ value }}</span></div>
+              {% else %}<span class="muted">no effect was described</span>
+              {% endfor %}</td></tr>
+      <tr><th>Reason</th><td>{{ preview.detail.reason }}</td></tr>
+      <tr><th>Risk of the action</th>
+          <td><span class="badge {{ preview.detail.risk.level }}">{{ preview.detail.risk.level }}</span>
+              <span class="muted">{{ preview.detail.risk.score }}/100 &mdash; this is the risk of
+              the ACT, not of the incident</span></td></tr>
+      <tr><th>Expected result</th><td>{{ preview.detail.expected }}</td></tr>
+    </table>
+    {% endif %}
+    <p class="muted" style="font-size:var(--t-sm)">
+      Nothing has run. Approving re-validates the action id, re-derives every
+      parameter from this incident and runs the registry validator again &mdash;
+      the preview above is a description, not a permission.
+    </p>
+    <div class="actions">
+      <form class="inline" method="post"
+            action="{{ url_for('incident_approve', incident_id=incident.id) }}">
+        <input type="hidden" name="action" value="{{ preview.detail.action if preview and preview.detail else '' }}">
+        <button type="submit">Approve and run</button>
+      </form>
+      <form class="inline" method="post"
+            action="{{ url_for('incident_reject', incident_id=incident.id) }}">
+        <button class="ghost" type="submit">Reject</button>
+      </form>
+    </div>
+  </div>
+
+{% else %}
+  <div class="card">
+    <div class="actions">
+      {# Investigate is offered whenever the incident is open: pressing it twice
+         is harmless and re-reads the machine, which is often exactly what
+         somebody wants. #}
+      <form class="inline" method="post"
+            action="{{ url_for('incident_investigate', incident_id=incident.id) }}">
+        <button type="submit">Investigate</button>
+      </form>
+
+      {% if writable %}
+      <form class="inline" method="post"
+            action="{{ url_for('incident_remediate', incident_id=incident.id) }}">
+        <button class="ghost" type="submit">Propose a fix&hellip;</button>
+      </form>
+      {% endif %}
+
+      <form class="inline" method="post"
+            action="{{ url_for('incident_ignore', incident_id=incident.id) }}">
+        <button class="ghost" type="submit">Ignore</button>
+      </form>
+    </div>
+    <p class="muted" style="font-size:var(--t-sm);margin:var(--s2) 0 0">
+      Investigating runs
+      <code class="mono">{{ (incident.detail.investigate if incident.detail else none) or 'a read-only action' }}</code>,
+      which cannot change anything.
+      {% if writable %}
+        A fix would use <code class="mono">{{ writable | join(', ') }}</code>, and
+        would still need approval and verification.
+      {% else %}
+        There is no remediation Guardian is permitted to perform for this
+        incident type &mdash; it needs a human.
+      {% endif %}
+    </p>
+  </div>
+{% endif %}
+{% endif %}
+
+{# ===========================================================================
+   ROOT CAUSE -- fact / inference / recommendation kept apart (brief 14, 39)
+   =========================================================================== #}
+{% set analysis = incident.detail.root_cause if incident.detail else none %}
+<div class="section-title">
+  <span>Root-cause analysis</span>
+  {% if analysis %}<span class="muted" style="font-size:var(--t-sm)">
+    {{ '%.0f' | format(analysis.confidence * 100) }}% confidence &middot;
+    ran <code class="mono">{{ analysis.action }}</code></span>{% endif %}
+</div>
+
+{% if not analysis %}
+  <div class="card">
+    <p class="muted" style="margin:0">
+      Not investigated yet. Press <strong>Investigate</strong> above to run this
+      incident type&rsquo;s read-only investigation and collect evidence.
+    </p>
+  </div>
+{% else %}
+  <div class="analysis">
+    <div class="col fact">
+      <h3>Fact &mdash; measured</h3>
+      <ul>{% for line in analysis.facts %}<li>{{ line }}</li>{% else %}
+        <li class="muted">no readings were collected</li>{% endfor %}</ul>
+    </div>
+    <div class="col inference">
+      <h3>Inference &mdash; reasoned</h3>
+      <ul>{% for line in analysis.inferences %}<li>{{ line }}</li>{% else %}
+        <li class="muted">no conclusion was drawn</li>{% endfor %}</ul>
+    </div>
+    <div class="col recommendation">
+      <h3>Recommendation &mdash; suggested</h3>
+      <ul>{% for line in analysis.recommendations %}<li>{{ line }}</li>{% else %}
+        <li class="muted">nothing to suggest</li>{% endfor %}</ul>
+    </div>
+  </div>
+  {% if analysis.primary_cause %}
+  <div class="card" style="margin-top:var(--s2)">
+    <h2>Primary cause</h2>
+    {# Key and value per line, not the raw object. The interpreters return a
+       small dict whose keys ARE the useful labels ('kind', 'pid', 'units'), so
+       printing them as rows needs no translation table -- only the decision not
+       to hand a reader a Python literal. #}
+    {% for key, value in analysis.primary_cause.items() %}
+    <div><span class="muted">{{ key }}:</span>
+      <span class="mono">{{ value | join(', ') if value is sequence and value is not string else value }}</span></div>
+    {% endfor %}
+    <div class="sub">
+      An inference from one reading taken after the fact &mdash; never a proof,
+      which is why the confidence above is capped.
+    </div>
+  </div>
+  {% endif %}
+{% endif %}
+
+{# ===========================================================================
+   WHAT YOU CAN DO YOURSELF
+
+   Shown when Guardian has no permitted remediation -- which, for every incident
+   type except service_failure, is always. The page used to end the sentence at
+   "it needs a human" and stop, which told the reader a human was needed without
+   telling them what the human should do. These are commands to COPY AND RUN,
+   with the pid the investigation above already found. Nothing on this page runs
+   any of them, and there is no button that could.
+
+   The order is gentlest first -- look, then soften, then stop -- so the
+   destructive option is never the first thing under the cursor.
+   =========================================================================== #}
+{% if manual_steps %}
+<div class="section-title">
+  <span>What you can do yourself</span>
+  <span class="muted" style="font-size:var(--t-sm)">Guardian will not run these</span>
+</div>
+<div class="card">
+  <ol class="manual">
+    {% for step in manual_steps %}
+    <li class="manual-step {{ step.kind }}">
+      <code class="mono manual-cmd">{{ step.command }}</code>
+      <p class="manual-why">{{ step.why }}</p>
+      {% if step.caution %}
+      <p class="manual-caution">{{ step.caution }}</p>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  <div class="sub">
+    Guardian has exactly one action that changes this machine
+    (<code class="mono">heal_service</code>, which may only start apache2), so it
+    cannot reduce CPU load, free memory or delete files. That is a deliberate
+    limit on what a web page is allowed to do, not a missing feature &mdash;
+    which is why the work is handed to you here rather than performed.
+  </div>
+</div>
+{% endif %}
+
+{# ===========================================================================
+   BEFORE / AFTER -- section 28
+   =========================================================================== #}
+{% set fix = incident.detail.remediation if incident.detail else none %}
+{% if fix %}
+<div class="section-title"><span>Before and after</span></div>
+<div class="card">
+  <div class="beforeafter">
+    <div>
+      <h2>Before</h2>
+      <div>severity <span class="badge {{ fix.before.severity }}">{{ fix.before.severity }}</span></div>
+      <div class="sub">risk {{ fix.before.risk_score }} &middot; status {{ fix.before.status }}</div>
+      {% for metric, value in (fix.before.metrics or {}).items() %}
+        <div class="mono" style="font-size:var(--t-sm)">{{ metric }} = {{ value }}</div>
+      {% endfor %}
+    </div>
+    <div class="arrow">&rarr;</div>
+    <div>
+      <h2>After</h2>
+      <div>severity <span class="badge {{ fix.after.severity }}">{{ fix.after.severity }}</span></div>
+      <div class="sub">risk {{ fix.after.risk_score }} &middot; status {{ fix.after.status }}</div>
+      {% for metric, value in (fix.after.metrics or {}).items() %}
+        <div class="mono" style="font-size:var(--t-sm)">{{ metric }} = {{ value }}</div>
+      {% endfor %}
+    </div>
+  </div>
+  <h2 style="margin-top:var(--s3)">Verification</h2>
+  <p class="muted" style="font-size:var(--t-sm);margin:0 0 var(--s1)">
+    Measured independently after the action, not read from its exit status
+    (which was <code class="mono">{{ fix.exit_status }}</code>).
+  </p>
+  <table>
+    {% for check in fix.checks %}
+    <tr>
+      <td style="width:40px"><span class="badge {{ 'PASS' if check.ok else 'FAIL' }}">{{ '&check;' | safe if check.ok else '&times;' | safe }}</span></td>
+      <td>{{ check.message }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+{# ===========================================================================
+   SYMPTOMS AND CHARTS
+   =========================================================================== #}
+<div class="section-title"><span>Symptoms &mdash; what is actually behaving oddly</span></div>
+<div class="card">
+  <p class="muted" style="font-size:var(--t-sm);margin:0 0 var(--s2)">
+    Every measurement this incident has ever involved &mdash; not only the ones
+    abnormal at this instant. Each one is said in English first and drawn
+    second: the dashed line on the chart is this machine&rsquo;s own baseline
+    and the shaded band is one standard deviation around it, so an anomaly is
+    literally the line leaving the band.
+  </p>
+  <div class="grid two">
+    {# story.symptoms is the same list as incident.detail.symptoms, with an
+       English label, a plain sentence and an explanation of what the metric
+       measures attached by guardian_explain. The raw identifier is still shown
+       underneath, because it is what the API and the database use and somebody
+       will want to look it up. #}
+    {% for symptom in story.symptoms %}
+    <div class="symptom">
+      <div class="head">
+        <span class="label">{{ symptom.label }}</span>
+        <span class="badge {{ symptom.verdict }}">{{ symptom.verdict }}</span>
+      </div>
+      <p class="said">{{ symptom.sentence }}</p>
+      {% if symptom.meaning %}
+      <p class="means">{{ symptom.label }} is {{ symptom.meaning }}.</p>
+      {% endif %}
+      <svg class="chart" data-metric="{{ symptom.metric }}" data-seconds="3600"
+           {% if symptom.baseline is not none %}data-mean="{{ symptom.baseline }}"{% endif %}
+           role="img" aria-label="history of {{ symptom.label }}"></svg>
+      <div class="sub id">
+        {{ symptom.metric }}
+        {% if symptom.z_score is not none %}&middot; z = {{ '%+.1f' | format(symptom.z_score) }}
+          (standard deviations from the baseline){% endif %}
+        &middot; trend {{ symptom.trend }}
+      </div>
+    </div>
+    {% endfor %}
+    {% if not story.symptoms %}
+    <p class="muted" style="margin:0">
+      No per-measurement detail was recorded for this incident.
+    </p>
+    {% endif %}
+  </div>
+</div>
+
+{# ===========================================================================
+   EVIDENCE AND SCORING
+   =========================================================================== #}
+<div class="grid two" style="margin-top:var(--s2)">
+  <div class="card">
+    <h2>Evidence &mdash; readings only</h2>
+    <ul style="margin:0;padding-left:var(--s2);font-size:var(--t-sm)">
+      {% for line in incident.evidence or [] %}<li class="mono">{{ line }}</li>{% endfor %}
+    </ul>
+  </div>
+  <div class="card">
+    <h2>How the severity was reached</h2>
+    <ul style="margin:0;padding-left:var(--s2);font-size:var(--t-sm)">
+      {% for step in (incident.detail.severity_steps if incident.detail else []) %}
+        <li>{{ step }}</li>{% endfor %}
+    </ul>
+    {% set risk = incident.detail.risk if incident.detail else none %}
+    {% if risk %}
+    <h2 style="margin-top:var(--s2)">What the risk score is made of</h2>
+    <table>
+      {% for name, points in risk.contributions | dictsort(by='value', reverse=true) %}
+      <tr>
+        <td>{{ name }}</td>
+        <td style="width:50%"><div class="bar" style="margin:0">
+          <i style="width:{{ (points / (risk.score or 1) * 100) | round }}%;background:var(--accent)"></i></div></td>
+        <td class="num mono">{{ points }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% endif %}
+  </div>
+</div>
+
+{# ===========================================================================
+   TIMELINE -- section 27
+   =========================================================================== #}
+<div class="section-title"><span>Timeline</span></div>
+<div class="card">
+  <p class="muted" style="font-size:var(--t-sm);margin:0 0 var(--s2)">
+    Everything that has changed about this incident, oldest first. It records
+    <em>changes</em>, not ticks &mdash; an incident observed 40 times does not
+    produce 40 lines here.
+  </p>
+  <ul class="timeline">
+    {% for entry in incident.timeline %}
+    <li class="{{ 'is-status' if entry.kind == 'STATUS' else ('is-action' if entry.kind == 'ACTION' else ('is-verify' if entry.kind == 'VERIFY' else '')) }}">
+      <div class="when">{{ entry.ts_human }}
+        <span class="chip">{{ entry.kind }}</span>
+        {% if entry.status %}<span class="badge {{ entry.status }}">{{ status_label(entry.status) }}</span>{% endif %}
+      </div>
+      <div class="what">{{ entry.message }}</div>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+
+{# ===========================================================================
+   THE GLOSSARY                                              (Phase 9)
+
+   Collapsed, at the foot of the page where the jargon has already been met.
+   Putting it in the documentation instead would be putting it where nobody
+   with a question is looking.
+   =========================================================================== #}
+<details style="margin-top:var(--s3)">
+  <summary>What do these words mean? ({{ glossary | length }} terms)</summary>
+  <dl class="glossary">
+    {% for term, meaning in glossary %}
+    <div><dt>{{ term }}</dt><dd>{{ meaning }}</dd></div>
+    {% endfor %}
+  </dl>
+</details>
+
+{% endblock %}
+
+{% block script %}
+<script>
+  /* One call draws every <svg data-metric> on the page. The charts are the last
+     thing to load: if the API is slow or the history is empty, the incident's
+     text is already readable and each chart replaces itself with an
+     explanation rather than leaving an empty box. */
+  GuardianCharts.drawAll();
+</script>
+{% endblock %}

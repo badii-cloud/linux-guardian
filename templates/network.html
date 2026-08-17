@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Network{% endblock %}
+{% block heading %}Network{% endblock %}
+
+{% block body %}
+{% if network.status != 'ok' %}
+  <div class="err">network.sh failed: {{ network.message }}</div>
+{% else %}
+
+<div class="grid">
+  <div class="card">
+    <h2>Interface</h2>
+    <div class="mid">{{ network.interface.name or '--' }}</div>
+    <div class="sub">{{ network.interface.state }} &middot;
+      <span class="mono">{{ network.interface.mac_address }}</span></div>
+  </div>
+  <div class="card">
+    <h2>Address</h2>
+    <div class="mid mono">{{ network.interface.ip_address or '--' }}</div>
+    <div class="sub">/{{ network.interface.prefix_length }} &middot;
+      {{ network.interface.netmask }}</div>
+  </div>
+  <div class="card">
+    <h2>Gateway</h2>
+    <div class="mid mono">{{ network.gateway or '--' }}</div>
+    <div class="sub">
+      <span class="badge {{ 'PASS' if network.connectivity.reachable else 'FAIL' }}">
+        {{ 'reachable' if network.connectivity.reachable else 'unreachable' }}</span>
+      {{ network.connectivity.packet_loss_percent }}% loss
+    </div>
+  </div>
+  <div class="card">
+    <h2>DNS</h2>
+    <div class="mid">{{ network.dns_server_count }}</div>
+    <div class="sub mono">{{ network.dns_servers | join(', ') if network.dns_servers else 'none configured' }}</div>
+  </div>
+</div>
+
+<div class="section-title"><span>Traffic</span>
+  <span class="muted" style="font-size:var(--t-sm)">derived from raw counters &mdash; last 6 hours</span></div>
+<div class="grid two">
+  <div class="card">
+    <h2>Received</h2>
+    <svg class="chart" data-metric="net_rx_bytes" data-seconds="21600"
+         role="img" aria-label="bytes received per second"></svg>
+    <div class="sub">bytes/second</div>
+  </div>
+  <div class="card">
+    <h2>Transmitted</h2>
+    <svg class="chart" data-metric="net_tx_bytes" data-seconds="21600"
+         role="img" aria-label="bytes transmitted per second"></svg>
+    <div class="sub">bytes/second</div>
+  </div>
+  <div class="card">
+    <h2>Established connections</h2>
+    <svg class="chart" data-metric="established_connections" data-seconds="21600"
+         role="img" aria-label="established connections"></svg>
+    <div class="sub">conversations in progress</div>
+  </div>
+  <div class="card">
+    <h2>Listening sockets</h2>
+    <svg class="chart" data-metric="listening_sockets" data-seconds="21600"
+         role="img" aria-label="listening sockets"></svg>
+    <div class="sub">every listening socket is a door</div>
+  </div>
+</div>
+
+<div class="note" style="margin-top:var(--s3)">
+  <strong>This page is read-only by design.</strong> Nothing here can change an
+  interface, a route or a firewall rule. The traffic figures are derived from
+  the kernel&rsquo;s cumulative byte counters by differencing two stored samples,
+  which is why they are rates rather than totals.
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block script %}<script>GuardianCharts.drawAll();</script>{% endblock %}

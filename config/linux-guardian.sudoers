@@ -1,0 +1,56 @@
+# =============================================================================
+#  Linux Guardian -- sudoers rule
+#
+#  INSTALL WITH (as root, and ONLY with visudo -- see the warning below):
+#      sudo install -m 0440 -o root -g root \
+#           config/linux-guardian.sudoers /etc/sudoers.d/linux-guardian
+#      sudo visudo -c -f /etc/sudoers.d/linux-guardian
+#
+#  WHY THIS FILE EXISTS
+#  Starting a system service requires root. linux-guardian does NOT run as root:
+#  the Flask app in Phase 5 runs as the ordinary user, and running a web server
+#  as root would mean any bug in it is a total compromise of the machine.
+#  So the user is granted the smallest possible amount of root: three exact
+#  commands, on one exact unit, with no password.
+#
+#  WHY EACH PART IS WRITTEN THE WAY IT IS
+#
+#    kali            the user this applies to. Change it if your login differs.
+#    ALL=            on any host (this file is only ever on this machine).
+#    (root)          the identity the commands may be run AS.
+#    NOPASSWD:       no password prompt. This is REQUIRED, not a convenience:
+#                    healing.sh runs from a web request and from a background
+#                    daemon, neither of which has a terminal to type into. It
+#                    calls `sudo -n`, which fails instead of prompting, so
+#                    without this rule the dashboard reports a clean error
+#                    rather than hanging.
+#
+#    FULL PATHS      /usr/bin/systemctl, never just "systemctl". A bare command
+#                    name would let anyone who can edit $PATH put their own
+#                    program called "systemctl" earlier in it and have sudo run
+#                    that as root. The absolute path removes the choice.
+#
+#    EXACT ARGUMENTS Each line names the unit. Without the argument, the rule
+#                    would permit `systemctl start ANYTHING` -- including a unit
+#                    the attacker wrote themselves. Note there is no trailing
+#                    "" wildcard anywhere in this file, deliberately.
+#
+#    NO stop, NO disable, NO daemon-reload. healing.sh never needs them, so
+#    they are not granted. To stop apache2 for a demonstration, type your own
+#    password like any other administrator:  sudo systemctl stop apache2
+#
+#  WHY reset-failed IS INCLUDED
+#  When a unit fails repeatedly systemd rate-limits it (5 starts in 10 seconds
+#  by default) and refuses further attempts with "start request repeated too
+#  quickly". healing.sh clears that counter first, otherwise automatic recovery
+#  stops working exactly when it is needed most.
+#
+#  WARNING -- A BROKEN sudoers FILE CAN LOCK YOU OUT OF sudo ENTIRELY.
+#  Always validate before trusting it:   sudo visudo -c -f <file>
+#  The 0440 permissions and root ownership above are mandatory; sudo ignores
+#  any file in /etc/sudoers.d that is group- or world-writable.
+# =============================================================================
+
+kali ALL=(root) NOPASSWD: /usr/bin/systemctl start apache2.service
+kali ALL=(root) NOPASSWD: /usr/bin/systemctl restart apache2.service
+kali ALL=(root) NOPASSWD: /usr/bin/systemctl reset-failed apache2.service

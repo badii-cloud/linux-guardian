@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}System readiness{% endblock %}
+{% block heading %}System readiness{% endblock %}
+
+{% block topbar %}<a class="btn ghost" href="{{ url_for('readiness_page') }}">Run again</a>{% endblock %}
+
+{% block body %}
+<div class="note">
+  <strong>{{ report.passed }}/{{ report.total }} checks passed.</strong>
+  This is a read-only preflight check: it verifies Guardian’s configuration and
+  boundaries without restarting a service, writing a policy, or changing data.
+</div>
+
+<div class="card"><div class="t-scroll"><table>
+  <thead><tr><th>Area</th><th>Result</th><th>Meaning</th></tr></thead>
+  <tbody>{% for check in report.checks %}
+    <tr><td>{{ check.name }}</td><td><span class="badge {{ check.result }}">{{ check.result }}</span></td><td class="muted">{{ check.detail }}</td></tr>
+  {% endfor %}</tbody>
+</table></div></div>
+
+<div class="section-title"><span>How to use this page</span></div>
+<div class="grid two">
+  <div class="card"><h2>Before a demo</h2><p class="muted">Open this page first. Resolve any FAIL result before demonstrating a healing or incident workflow.</p></div>
+  <div class="card"><h2>If history is unavailable</h2><p class="muted">Dashboard monitoring still works. History and anomaly detection will resume after the database becomes available.</p></div>
+</div>
+{% endblock %}

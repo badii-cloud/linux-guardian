@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Linux Guardian{% endblock %}</title>
+{#
+   THE STYLESHEET IS A LOCAL FILE, NOT A CDN LINK.
+   url_for('static', ...) resolves to /static/css/guardian.css, served by Flask
+   from this project's own directory. Nothing here reaches the internet, so the
+   page is fully styled during an offline demonstration -- which is the whole
+   reason this project has never used Bootstrap or a Google font.
+#}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/guardian.css') }}">
+{% block style %}{% endblock %}
+</head>
+<body>
+<div class="shell">
+
+  {# =====================================================================
+     THE SIDEBAR
+     Grouped by what the pages are FOR rather than alphabetically, because a
+     navigation list is a claim about how the system is organised. Monitor
+     (what is happening), Respond (what to do about it), System (how Guardian
+     itself is set up).
+     ===================================================================== #}
+  <aside class="side">
+    <div class="brand">
+      <a href="{{ url_for('dashboard') }}">
+        <div class="name">Linux <span>Guardian</span></div>
+        <div class="tag">DETECT &middot; ANALYZE &middot; RESPOND &middot; VERIFY</div>
+      </a>
+    </div>
+
+    <nav>
+      <div class="group">Monitor</div>
+      {# request.endpoint marks the current page. Without it every link looks
+         identical on every page and the sidebar stops telling you where you
+         are, which is most of what a sidebar is for. #}
+      <a href="{{ url_for('dashboard') }}" class="{{ 'on' if request.endpoint == 'dashboard' }}">
+        <span class="ico">&#9632;</span> Dashboard</a>
+      <a href="{{ url_for('processes') }}" class="{{ 'on' if request.endpoint == 'processes' }}">
+        <span class="ico">&#9776;</span> Processes</a>
+      <a href="{{ url_for('services_page') }}" class="{{ 'on' if request.endpoint == 'services_page' }}">
+        <span class="ico">&#9881;</span> Services</a>
+      <a href="{{ url_for('network_page') }}" class="{{ 'on' if request.endpoint == 'network_page' }}">
+        <span class="ico">&#8646;</span> Network</a>
+
+      <div class="group">Respond</div>
+      <a href="{{ url_for('incidents_page') }}" class="{{ 'on' if request.endpoint in ('incidents_page','incident_page') }}">
+        <span class="ico">&#9888;</span> Incidents
+        {# The one status colour in the navigation, and it is a verdict: how
+           many incidents are open right now. Grey when there are none, so the
+           red genuinely means something when it appears. #}
+        {% if open_incidents is defined and open_incidents %}
+          <span class="count alert">{{ open_incidents }}</span>
+        {% else %}
+          <span class="count">0</span>
+        {% endif %}
+      </a>
+      <a href="{{ url_for('security_page') }}" class="{{ 'on' if request.endpoint == 'security_page' }}">
+        <span class="ico">&#9737;</span> Security</a>
+      <a href="{{ url_for('console') }}" class="{{ 'on' if request.endpoint in ('console','console_run','console_confirm') }}">
+        <span class="ico">&#9993;</span> Assistant</a>
+
+      <div class="group">System</div>
+      <a href="{{ url_for('automation_page') }}" class="{{ 'on' if request.endpoint == 'automation_page' }}">
+        <span class="ico">&#8635;</span> Automation</a>
+      <a href="{{ url_for('logs') }}" class="{{ 'on' if request.endpoint == 'logs' }}">
+        <span class="ico">&#9776;</span> Audit log</a>
+      <a href="{{ url_for('settings_page') }}" class="{{ 'on' if request.endpoint == 'settings_page' }}">
+        <span class="ico">&#9784;</span> Settings</a>
+      <a href="{{ url_for('guide_page') }}" class="{{ 'on' if request.endpoint == 'guide_page' }}">
+        <span class="ico">?</span> System guide</a>
+      <a href="{{ url_for('readiness_page') }}" class="{{ 'on' if request.endpoint == 'readiness_page' }}">
+        <span class="ico">&#10003;</span> System readiness</a>
+    </nav>
+
+    <div class="foot">
+      {{ guardian_host or 'localhost' }}<br>
+      <code>127.0.0.1:5000</code>
+    </div>
+  </aside>
+
+  {# ===================================================================== #}
+  <div class="content">
+    <div class="topbar">
+      <h1>{% block heading %}{{ self.title() }}{% endblock %}</h1>
+      <div class="right">{% block topbar %}{% endblock %}</div>
+    </div>
+    <main>
+      {% block body %}{% endblock %}
+    </main>
+  </div>
+
+</div>
+
+{# Scripts last, after the markup they operate on, so nothing has to wait for
+   DOMContentLoaded before it can find an element. #}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+{% block script %}{% endblock %}
+</body>
+</html>

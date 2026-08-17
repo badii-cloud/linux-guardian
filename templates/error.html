@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} &middot; Linux Guardian{% endblock %}
+{% block body %}
+<div class="card">
+  <div class="big" style="color:var(--fail)">{{ code }}</div>
+  <p class="sub">{{ message }}</p>
+  {% if code == 503 %}
+  <p class="sub">
+    Guardian did not make a change. The required local service or history store
+    was temporarily unavailable. Check the Audit log, then try again.
+  </p>
+  {% else %}
+  <p class="sub">
+    This request was rejected before anything ran. Module and service names must
+    appear in the allow lists defined in <span class="mono">app.py</span> and
+    <span class="mono">config/guardian.conf</span>.
+  </p>
+  {% endif %}
+  <p><a href="{{ url_for('dashboard') }}" style="color:var(--accent)">&larr; back to dashboard</a></p>
+</div>
+{% endblock %}

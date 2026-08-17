@@ -1,0 +1,292 @@
+{
+  "_readme": [
+    "Linux Guardian -- linux/actions.json                                (Phase 6)",
+    "",
+    "THE ACTION REGISTRY. This file is the complete list of things the natural-",
+    "language console is allowed to do. If it is not in here, it cannot happen.",
+    "",
+    "WHY THIS FILE EXISTS AT ALL:",
+    "  Phase 5 already proved the pattern -- app.py has ALLOWED_MODULES, a Python",
+    "  dictionary, and an HTTP request supplies only a NAME that is looked up in",
+    "  it. Phase 6 needs the same guarantee, but for actions that take ARGUMENTS,",
+    "  so the lookup table grows a schema: what each action runs, and exactly what",
+    "  shape each of its parameters is allowed to be.",
+    "",
+    "  The language model NEVER writes a command. It reads this list and returns",
+    "  one id from it. Everything after that point is ordinary, boring, checked",
+    "  code -- the same code that runs when the user clicks a button.",
+    "",
+    "WHY THE KEYS BEGINNING WITH AN UNDERSCORE:",
+    "  JSON has no comment syntax -- there is no '#' and no '//'. The teaching",
+    "  requirement still applies, so documentation lives in keys the loader",
+    "  deliberately ignores: any key starting with '_' is skipped by",
+    "  guardian_actions.py. That keeps the file valid JSON (jq can read it) while",
+    "  still explaining itself.",
+    "",
+    "FIELD REFERENCE",
+    "  id            The only name the outside world may use. Matched exactly.",
+    "  description   Shown in the console's 'available actions' panel.",
+    "  category      Grouping for the UI only. Never affects permission.",
+    "  danger        'read'  -> runs immediately, changes nothing.",
+    "                'write' -> returns a PREVIEW first; only a second, explicit",
+    "                           confirm POST executes it.",
+    "  script        Filename inside linux/. Resolved by the loader against the",
+    "                linux/ directory -- the value is never joined with anything",
+    "                that came from a request. null means the action is served",
+    "                natively by Python (see 'native').",
+    "  native        Name of a Python handler, used only when script is null.",
+    "  args          Fixed argv entries placed BEFORE any parameters. These are",
+    "                written here by a human, never derived from user input.",
+    "  select        Which top-level key of the script's JSON answers this",
+    "                question. null means 'show the whole object'. This is how a",
+    "                read action can reuse an existing Phase 1 module without",
+    "                modifying it: system.sh still reports everything, and the",
+    "                action simply declares which part it is asking about.",
+    "  params        Ordered list. THE ORDER IS THE ARGV ORDER -- params with",
+    "                pass_to_script true are appended to the command in exactly",
+    "                this sequence, each as its OWN argv entry, never joined into",
+    "                a string.",
+    "",
+    "PARAM FIELDS",
+    "  name            Key the console and the matcher use.",
+    "  type            'enum' | 'name' | 'text' | 'day' | 'time'. Chooses which",
+    "                  normaliser runs before validation.",
+    "  pattern         Python regular expression. Anchored with ^...$ so it must",
+    "                  match the WHOLE value -- an unanchored pattern would happily",
+    "                  accept 'schedule; rm -rf /' because it contains 'schedule'.",
+    "  required        Whether the action can run without it.",
+    "  pass_to_script  true  -> becomes an argv entry for the script.",
+    "                  false -> used by Python only (to pick part of the output).",
+    "  choices_from    Name of a variable in config/guardian.conf whose",
+    "                  space-separated words are the only accepted values. Used",
+    "                  instead of writing service names here, because rule 3 says",
+    "                  the config file is the single source of truth for them.",
+    "  max_length      Hard cap applied before the regex, so a megabyte of text",
+    "                  can never be handed to a regular expression engine."
+  ],
+
+  "version": 1,
+
+  "actions": [
+    {
+      "id": "check_disk",
+      "description": "Report how full the root filesystem is",
+      "category": "system",
+      "danger": "read",
+      "script": "system.sh",
+      "args": [],
+      "select": "disk",
+      "params": [],
+      "_comment": "Wraps the existing Phase 1 system.sh untouched. system.sh keeps reporting CPU, RAM, disk and load exactly as before; 'select' just says which part of that object answers the question 'how full is my disk'."
+    },
+    {
+      "id": "check_memory",
+      "description": "Report RAM usage in percent and megabytes",
+      "category": "system",
+      "danger": "read",
+      "script": "system.sh",
+      "args": [],
+      "select": "memory",
+      "params": []
+    },
+    {
+      "id": "check_cpu",
+      "description": "Report current CPU usage and load average",
+      "category": "system",
+      "danger": "read",
+      "script": "system.sh",
+      "args": [],
+      "select": "cpu",
+      "params": []
+    },
+    {
+      "id": "check_network",
+      "description": "Report interface, IP, gateway and gateway reachability",
+      "category": "network",
+      "danger": "read",
+      "script": "network.sh",
+      "args": [],
+      "select": null,
+      "params": [],
+      "_comment": "select is null because every field network.sh returns is part of the answer to 'is my network working'."
+    },
+    {
+      "id": "check_service",
+      "description": "Report whether one monitored service is running",
+      "category": "services",
+      "danger": "read",
+      "script": "services.sh",
+      "args": [],
+      "select": "services",
+      "filter_by": { "param": "service", "field": "name" },
+      "params": [
+        {
+          "name": "service",
+          "type": "enum",
+          "pattern": "^[A-Za-z0-9@._-]{1,64}$",
+          "required": true,
+          "pass_to_script": false,
+          "choices_from": "MONITORED_SERVICES",
+          "_comment": "pass_to_script is FALSE on purpose. services.sh takes no arguments -- it reports every service in MONITORED_SERVICES. So this parameter never becomes part of a command line at all; Python uses it to pick one entry out of the JSON that comes back. An argument that is never passed to a process cannot be an injection, which is the cheapest possible way to be safe. The pattern still runs, because the value is also echoed back to the user."
+        }
+      ]
+    },
+    {
+      "id": "list_processes",
+      "description": "List the top processes by current CPU usage",
+      "category": "system",
+      "danger": "read",
+      "script": "process.sh",
+      "args": [],
+      "select": "processes",
+      "params": []
+    },
+    {
+      "id": "run_diagnosis",
+      "description": "Run the full health check and return the score out of 100",
+      "category": "system",
+      "danger": "read",
+      "script": "diagnosis.sh",
+      "args": [],
+      "select": null,
+      "params": []
+    },
+    {
+      "id": "show_logs",
+      "description": "Show the most recent entries from the Guardian audit log",
+      "category": "logs",
+      "danger": "read",
+      "script": null,
+      "native": "read_log",
+      "args": [],
+      "select": null,
+      "params": [],
+      "_comment": "script is null and this one is served by Python directly. Phase 5's /logs route already reads logs/guardian.log with Path.read_text() and explains why: there is no user input involved, so there is nothing to sanitise, and Python can read a file without starting a process. Inventing a shell script whose entire job is `tail` would add a subprocess and a JSON-escaping problem for no benefit."
+    },
+
+    {
+      "id": "list_files",
+      "description": "List the files in the Guardian workspace",
+      "category": "files",
+      "danger": "read",
+      "script": "workspace.sh",
+      "args": ["list"],
+      "select": null,
+      "params": [],
+      "_comment": "The in-sandbox answer to 'is there a file called X'. It reports ONLY on $WORKSPACE_DIR, because that is the only directory this project may touch -- asking about ~/Desktop is not a gap to fill, it is the containment working. danger is 'read': listing a directory changes nothing, so it runs immediately with no confirmation. The fixed arg 'list' is written here by a human and never derived from a request."
+    },
+    {
+      "id": "heal_service",
+      "description": "Start a stopped service that is on the healable list",
+      "category": "services",
+      "danger": "write",
+      "script": "healing.sh",
+      "args": [],
+      "select": null,
+      "params": [
+        {
+          "name": "service",
+          "type": "enum",
+          "pattern": "^[A-Za-z0-9@._-]{1,64}$",
+          "required": true,
+          "pass_to_script": true,
+          "choices_from": "HEALABLE_SERVICES",
+          "_comment": "This IS passed to a script, so all three checks apply: the character pattern, the allow-list read from guardian.conf, and then healing.sh itself re-checking PROTECTED_SERVICES and HEALABLE_SERVICES from scratch. Phase 3 does not trust Phase 6, and Phase 6 does not trust the matcher. Deleting any one of these three still leaves the system safe."
+        }
+      ]
+    },
+    {
+      "id": "create_file",
+      "description": "Create a text file inside the Guardian workspace",
+      "category": "files",
+      "danger": "write",
+      "script": "workspace.sh",
+      "args": ["create"],
+      "select": null,
+      "params": [
+        {
+          "name": "name",
+          "type": "name",
+          "pattern": "^[a-zA-Z0-9_][a-zA-Z0-9_-]{0,39}$",
+          "required": true,
+          "pass_to_script": true,
+          "_comment": "No dot and no slash are in this character class, which is what stops '../etc/passwd' and 'notes.txt/../../x'. The extension is added by the script, not by the user, so the user cannot choose to write a .service or a .sh file. THE FIRST CHARACTER IS A SEPARATE CLASS ON PURPOSE: it excludes the hyphen, so a name can never be '-rf' or '-f'. A value beginning with a hyphen is not a path to most Unix commands, it is a FLAG, and a validator that allows one is handing an attacker an option rather than a filename. The hyphen is still legal anywhere after the first character, so 'my-notes' works."
+        },
+        {
+          "name": "content",
+          "type": "text",
+          "pattern": "^[^\\u0000]*$",
+          "required": false,
+          "pass_to_script": true,
+          "max_length": 65536,
+          "_comment": "Free text is allowed -- it is the CONTENT of a file, not part of a command, and it is passed as its own argv entry so a semicolon in it is just a semicolon. The one character banned is NUL, because a C string ends at NUL and a value containing one can mean different things to Python and to the kernel."
+        }
+      ]
+    },
+    {
+      "id": "schedule_file",
+      "description": "Create a file on a repeating weekly schedule using a systemd user timer",
+      "category": "files",
+      "danger": "write",
+      "script": "schedule.sh",
+      "args": ["create"],
+      "select": null,
+      "params": [
+        {
+          "name": "name",
+          "type": "name",
+          "pattern": "^[a-zA-Z0-9_][a-zA-Z0-9_-]{0,39}$",
+          "required": true,
+          "pass_to_script": true,
+          "_comment": "This name becomes part of a unit filename (guardian-<name>.timer), so the same restriction protects ~/.config/systemd/user as well as the workspace."
+        },
+        {
+          "name": "day",
+          "type": "day",
+          "pattern": "^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$",
+          "required": true,
+          "pass_to_script": true,
+          "_comment": "The pattern matches the normalised form, not what the user typed. 'thursday', 'THU' and 'Thu' all normalise to 'Thu' first, which is exactly the spelling systemd's OnCalendar= expects."
+        },
+        {
+          "name": "time",
+          "type": "time",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "required": true,
+          "pass_to_script": true,
+          "_comment": "24-hour HH:MM. The hour alternation ([01][0-9]|2[0-3]) is what makes 25:00 impossible; a lazier [0-9]{2} would accept it. '12 pm', '12pm' and '12:00' all normalise to '12:00' before this runs."
+        }
+      ]
+    },
+    {
+      "id": "list_schedules",
+      "description": "List the schedules this project has created",
+      "category": "files",
+      "danger": "read",
+      "script": "schedule.sh",
+      "args": ["list"],
+      "select": null,
+      "params": [],
+      "_comment": "danger is 'read' -- listing timers changes nothing. The fixed arg 'list' is written here by a human and is not derived from the request."
+    },
+    {
+      "id": "cancel_schedule",
+      "description": "Stop and remove a schedule this project created",
+      "category": "files",
+      "danger": "write",
+      "script": "schedule.sh",
+      "args": ["cancel"],
+      "select": null,
+      "params": [
+        {
+          "name": "name",
+          "type": "name",
+          "pattern": "^[a-zA-Z0-9_][a-zA-Z0-9_-]{0,39}$",
+          "required": true,
+          "pass_to_script": true,
+          "_comment": "Only units whose filename starts with TIMER_PREFIX can be cancelled, so this can never disable a systemd unit that a human wrote."
+        }
+      ]
+    }
+  ]
+}

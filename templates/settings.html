@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block heading %}Settings{% endblock %}
+
+{% block body %}
+
+{# ---------------------------------------------------------------------------
+   READ-ONLY, AND THAT IS THE FEATURE.
+   A form here would mean the web process could rewrite the file that defines
+   its own limits -- including HEALABLE_SERVICES and PROTECTED_SERVICES. The
+   page shows every value and names the file to edit, which keeps policy where
+   a human with a text editor controls it.
+   --------------------------------------------------------------------------- #}
+<div class="note">
+  <strong>This page is deliberately read-only.</strong>
+  Every value below lives in <code class="mono">{{ config_path }}</code>, which is
+  the single source of truth for every Bash module and every Python module. A web
+  form that wrote to it would let the web process edit the file defining its own
+  limits &mdash; including which services it may restart. Edit the file, then
+  reload the page.
+</div>
+
+{% set shown = [] %}
+{% for group, keys in groups %}
+<div class="section-title"><span>{{ group }}</span></div>
+<div class="card">
+  <div class="t-scroll">
+  <table>
+    <tbody>
+      {% for key in keys %}
+        {% if settings.get(key) is not none %}
+          {% set _ = shown.append(key) %}
+          <tr>
+            <th style="width:320px" class="mono">{{ key }}</th>
+            <td class="mono">{{ settings[key] if settings[key] != '' else '(empty &mdash; auto-detect)' | safe }}</td>
+          </tr>
+        {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endfor %}
+
+{# Anything not assigned a group above still appears, so a setting added to the
+   config can never silently vanish from this page. #}
+{% set leftovers = settings.keys() | reject('in', shown) | list | sort %}
+{% if leftovers %}
+<div class="section-title"><span>Other</span></div>
+<div class="card">
+  <div class="t-scroll">
+  <table><tbody>
+    {% for key in leftovers %}
+    <tr><th style="width:320px" class="mono">{{ key }}</th><td class="mono">{{ settings[key] }}</td></tr>
+    {% endfor %}
+  </tbody></table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

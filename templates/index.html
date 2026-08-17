@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block heading %}Dashboard{% endblock %}
+
+{% block topbar %}
+  <div class="clock" id="clock">
+    <span class="dot"></span><span id="clock-text">updated just now</span>
+  </div>
+{% endblock %}
+
+{% block body %}
+
+{% if diagnosis.status != 'ok' %}
+  <div class="err">diagnosis.sh failed: {{ diagnosis.message }}</div>
+{% endif %}
+
+{# ===========================================================================
+   THE HEADLINE ROW -- brief section 33
+   =========================================================================== #}
+<div class="grid">
+  <div class="card">
+    <h2>Health</h2>
+    <div class="big" id="score">{{ diagnosis.score if diagnosis.status == 'ok' else '--' }}</div>
+    <div class="bar"><i id="score-bar"
+      style="width:{{ diagnosis.score if diagnosis.status == 'ok' else 0 }}%;
+             background:var(--{{ 'pass' if diagnosis.grade == 'PASS' else ('warn' if diagnosis.grade == 'WARNING' else 'fail') }})"></i></div>
+    <div class="sub">
+      <span class="badge {{ diagnosis.grade }}" id="grade">{{ diagnosis.grade }}</span>
+      {{ diagnosis.summary.passed }}/{{ diagnosis.summary.total }} checks passing
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Open incidents</h2>
+    <div class="big" id="open-incidents">{{ open_incidents if open_incidents is not none else '--' }}</div>
+    <div class="sub">
+      {% if open_incidents %}
+        <a href="{{ url_for('incidents_page') }}" style="color:var(--accent)">review them</a>
+      {% else %}nothing open{% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Highest open risk</h2>
+    <div class="big" id="top-risk">
+      {{ incident_summary.highest_open_risk if incident_summary and incident_summary.highest_open_risk is not none else '--' }}</div>
+    <div class="sub">out of 100</div>
+  </div>
+
+  <div class="card">
+    <h2>History</h2>
+    <div class="big" id="store-ticks">{{ '{:,}'.format(store.ticks) if store else '--' }}</div>
+    <div class="sub" id="store-sub">
+      {% if store %}{{ '{:,}'.format(store.samples) }} readings, {{ (store.bytes / 1024) | round | int }} KB
+      {% else %}samples collected{% endif %}</div>
+  </div>
+</div>
+
+{# A summary of measured evidence. It never triggers an action; its link opens
+   the evidence page where the operator can make the next decision. #}
+<section class="briefing" aria-live="polite">
+  <div class="briefing-mark" id="briefing-state">{{ briefing.state }}</div>
+  <div>
+    <div class="briefing-label">Guardian briefing</div>
+    <div class="briefing-title" id="briefing-title">{{ briefing.title }}</div>
+    <div class="sub" id="briefing-detail">{{ briefing.detail }}</div>
+  </div>
+  <a class="btn ghost briefing-link" id="briefing-link" href="{{ briefing.href }}">{{ briefing.link }}</a>
+</section>
+
+{# ===========================================================================
+   LIVE METRICS, each with its own real chart underneath.
+
+   The number is the current reading and the chart is where it has been. A
+   number alone cannot tell you that 60% is the top of a climb or the bottom of
+   a fall, and that difference is usually the whole story.
+   =========================================================================== #}
+<div class="section-title"><span>Right now</span>
+  <span class="muted" style="font-size:var(--t-sm)">last hour</span></div>
+
+<div class="grid wide">
+  {% set cpu = diagnosis.checks | selectattr('id', 'equalto', 'cpu') | first %}
+  <div class="card">
+    <h2>CPU <span class="right badge {{ cpu.result if cpu }}">{{ cpu.result if cpu }}</span></h2>
+    <div class="mid" id="cpu-value">{{ system.cpu.usage_percent if system.status == 'ok' }}%</div>
+    <div class="sub">{{ system.cpu.cores if system.status == 'ok' }} cores</div>
+    <svg class="chart" data-metric="load_per_core" data-seconds="3600"
+         role="img" aria-label="load per core, last hour"></svg>
+    <div class="sub">load per core</div>
+  </div>
+
+  {% set mem = diagnosis.checks | selectattr('id', 'equalto', 'memory') | first %}
+  <div class="card">
+    <h2>Memory <span class="right badge {{ mem.result if mem }}">{{ mem.result if mem }}</span></h2>
+    <div class="mid" id="mem-value">{{ system.memory.usage_percent if system.status == 'ok' }}%</div>
+    <div class="sub">{{ system.memory.used_mb if system.status == 'ok' }} of
+      {{ system.memory.total_mb if system.status == 'ok' }} MB</div>
+    <svg class="chart" data-metric="memory_used_percent" data-seconds="3600"
+         role="img" aria-label="memory used percent, last hour"></svg>
+    <div class="sub">memory used %</div>
+  </div>
+
+  {% set disk = diagnosis.checks | selectattr('id', 'equalto', 'disk') | first %}
+  <div class="card">
+    <h2>Disk <span class="right badge {{ disk.result if disk }}">{{ disk.result if disk }}</span></h2>
+    <div class="mid" id="disk-value">{{ system.disk.usage_percent if system.status == 'ok' }}%</div>
+    <div class="sub">{{ system.disk.free_gb if system.status == 'ok' }} GB free</div>
+    <svg class="chart" data-metric="disk_used_percent" data-seconds="3600"
+         role="img" aria-label="disk used percent, last hour"></svg>
+    <div class="sub">disk used %</div>
+  </div>
+
+  <div class="card">
+    <h2>Network</h2>
+    <div class="mid">{{ network.interface.name if network.status == 'ok' }}</div>
+    <div class="sub">{{ network.interface.ip_address if network.status == 'ok' }}</div>
+    <svg class="chart" data-metric="net_rx_bytes" data-seconds="3600"
+         role="img" aria-label="bytes received per second, last hour"></svg>
+    <div class="sub">received, bytes/second</div>
+  </div>
+</div>
+
+{# ===========================================================================
+   CHECKS
+   Every row is rendered by Jinja, INCLUDING the passing ones. The live refresh
+   only toggles `hidden` and rewrites text -- it never builds HTML. That is why
+   the PASS/WARNING/FAIL rule lives in exactly one place, diagnosis.sh.
+   =========================================================================== #}
+<div class="section-title"><span>Checks</span></div>
+<div class="card">
+  <div class="t-scroll">
+  <table>
+    <thead><tr><th>Check</th><th class="num">Value</th><th>Verdict</th><th>Detail</th></tr></thead>
+    <tbody>
+      {% for check in diagnosis.checks if diagnosis.status == 'ok' %}
+      <tr>
+        <td>{{ check.label }}</td>
+        <td class="num mono">{{ check.value if check.value is not none else '--' }}{{ check.unit or '' }}</td>
+        <td><span class="badge {{ check.result }}">{{ check.result }}</span></td>
+        <td class="muted" style="font-size:var(--t-sm)">{{ check.message }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+{# ===========================================================================
+   SERVICES
+   =========================================================================== #}
+<div class="section-title"><span>Services</span>
+  <a href="{{ url_for('services_page') }}" class="btn ghost">All services</a></div>
+<div class="card">
+  <div class="t-scroll">
+  <table>
+    <thead><tr><th>Service</th><th>State</th><th>Enabled</th><th>Healing</th><th></th></tr></thead>
+    <tbody>
+      {% for service in services.services if services.status == 'ok' %}
+      <tr>
+        <td class="mono">{{ service.name }}</td>
+        <td><span class="badge {{ 'PASS' if service.running else ('FAIL' if service.failed else 'WARNING') }}">
+          {{ service.active_state }}</span></td>
+        <td class="muted">{{ 'yes' if service.enabled else 'no' }}</td>
+        <td class="muted">{{ 'allowed' if service.name in healable else 'protected' }}</td>
+        <td class="right">
+          {% if service.name in healable and not service.running %}
+          <form class="inline" method="post" action="{{ url_for('heal', service_name=service.name) }}">
+            <button type="submit">Heal</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block script %}
+<script>
+/* ===========================================================================
+   THE LIVE REFRESH.
+
+   It NEVER BUILDS HTML. Every row on this page, including the passing checks,
+   was rendered by Jinja; this only rewrites text and toggles visibility. That
+   is the rule that keeps the PASS/WARNING/FAIL logic in diagnosis.sh alone,
+   instead of being reimplemented here where it would quietly drift.
+
+   A FAILED FETCH OVERWRITES NOTHING. The clock goes stale instead, so old
+   numbers announce themselves rather than silently pretending to be current.
+   =========================================================================== */
+(function () {
+  "use strict";
+
+  var lastUpdate = Date.now();
+  var clock = document.getElementById("clock");
+  var clockText = document.getElementById("clock-text");
+
+  function set(id, text) {
+    var element = document.getElementById(id);
+    if (!element || text === undefined || text === null) return;
+    if (element.textContent !== String(text)) {
+      element.textContent = text;
+      element.classList.remove("changed");
+      void element.offsetWidth;          /* restart the animation */
+      element.classList.add("changed");
+    }
+  }
+
+  async function refresh() {
+    /* A hidden tab is not being read by anybody. Polling it wastes CPU on the
+       very machine this page is reporting the CPU of. */
+    if (document.hidden) return;
+    try {
+      var response = await fetch("/api/overview");
+      if (!response.ok) return;
+      var data = await response.json();
+
+      if (data.system && data.system.status === "ok") {
+        set("cpu-value", data.system.cpu.usage_percent + "%");
+        set("mem-value", data.system.memory.usage_percent + "%");
+        set("disk-value", data.system.disk.usage_percent + "%");
+      }
+      if (data.incidents && data.incidents.open !== undefined) {
+        set("open-incidents", data.incidents.open);
+        set("top-risk", data.incidents.highest_open_risk === null
+          ? "--" : data.incidents.highest_open_risk);
+      }
+      if (data.store && data.store.samples !== undefined) {
+        set("store-ticks", data.store.ticks.toLocaleString());
+        set("store-sub", data.store.samples.toLocaleString() + " readings, " +
+          Math.round(data.store.bytes / 1024) + " KB");
+      }
+      if (data.briefing) {
+        set("briefing-state", data.briefing.state);
+        set("briefing-title", data.briefing.title);
+        set("briefing-detail", data.briefing.detail);
+        var briefingLink = document.getElementById("briefing-link");
+        if (briefingLink) {
+          briefingLink.href = data.briefing.href;
+          briefingLink.textContent = data.briefing.link;
+        }
+      }
+      lastUpdate = Date.now();
+    } catch (error) {
+      /* Deliberately empty. A failed poll must leave the page exactly as it
+         was; the clock below is what tells the user the numbers are ageing. */
+    }
+  }
+
+  function tickClock() {
+    var age = Math.round((Date.now() - lastUpdate) / 1000);
+    clockText.textContent = age < 2 ? "updated just now" : "updated " + age + "s ago";
+    clock.classList.toggle("live", age < 20);
+  }
+
+  refresh();
+  GuardianCharts.drawAll();
+  setInterval(refresh, 10000);
+  setInterval(tickClock, 1000);
+  /* Charts are redrawn far less often than the numbers: a line whose right-hand
+     end moves every ten seconds is distracting, and an hour-long series does
+     not visibly change in that time. */
+  setInterval(function () { if (!document.hidden) GuardianCharts.drawAll(); }, 60000);
+})();
+</script>
+{% endblock %}
